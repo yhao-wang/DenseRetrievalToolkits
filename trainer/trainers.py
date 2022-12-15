@@ -207,9 +207,15 @@ class Trainer:
         # --evaluate: 基于评测数据，评测已训练模型，输出评测结果
         pass
 
-    def save(self):
+    def save(self, i_epoch):
         # --save: 保存模型参数到硬盘，包括Optimizer和Scheduler，train_step等，方便断点训练
-        pass
+        if self.local_rank == -1 or torch.distributed.get_rank() == 0:
+            logger.info("** ** * Saving fine-tuned model and optimizer ** ** * ")
+            model_to_save = self.model.lm_q
+            output_model_file = os.path.join(self.config['output_dir'], "model.{0}.bin".format(i_epoch))
+            torch.save(model_to_save.state_dict(), output_model_file)
+            output_optim_file = os.path.join(self.config['output_dir'], "optim.{0}.bin".format(i_epoch))
+            torch.save(self.optimizer.state_dict(), output_optim_file)
 
     def load(self):
         # --load: 从huggingface或硬盘读取模型参数并初始化，支持他人已预训练的ckpt如下所示
