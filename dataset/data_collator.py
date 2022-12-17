@@ -33,17 +33,18 @@ class QPCollator(DataCollatorWithPadding):
         qq = sampled_features[0]
         dd = sampled_features[1]
 
-        # 1 positive, n-1 negative
-        # if isinstance(qq[0], list):
-        #     qq = sum(qq, [])
-        if isinstance(dd[0], list):
-            dd = sum(dd, [])
         enq = []
         end = []
         for q in qq:
             enq.append(self.create_one_example(q, is_query=True))
-        for d in dd:
-            end.append(self.create_one_example(d, is_query=False))
+        for s in dd:
+            one_sample = []
+            for d in s:
+                one_sample.append(self.create_one_example(d, is_query=False))
+            end.append(one_sample)
+
+        if isinstance(end[0], list):
+            end = sum(end, [])
         
         q_collated = self.tokenizer.pad(
             enq,
