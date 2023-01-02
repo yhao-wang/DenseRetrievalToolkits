@@ -1,6 +1,38 @@
+import os
+import sys
 from trainer.trainer import Trainer
+from .arguments import DataArguments, ModelArguments, TrainingArguments
+from transformers import HfArgumentParser, AutoTokenizer
+from dataset.data_collator import QPCollator
+from dataset.abstract_dataset import ExactMatchDataset
+from dataloader.exactmatch_dataloader import ExactMatch_dataloader
+from trainer.sampler import RandomSampleNegatives
 
 
 def main():
+    parser = HfArgumentParser((ModelArguments, DataArguments, TrainingArguments))
 
-    trainer = Trainer(config, model, train_set=train_set, eval_set=eval_set, test_set=test_set)
+    if len(sys.argv) == 2 and sys.argv[1].endswith(".json"):
+        model_args, data_args, training_args = parser.parse_json_file(json_file=os.path.abspath(sys.argv[1]))
+    else:
+        model_args, data_args, training_args = parser.parse_args_into_dataclasses()
+        model_args: ModelArguments
+        data_args: DataArguments
+        training_args: TrainingArguments
+
+    tokenizer = AutoTokenizer.from_pretrained(
+        model_args.tokenizer_name if model_args.tokenizer_name else model_args.model_name_or_path,
+        cache_dir=model_args.cache_dir
+    )
+    
+    train_dataset = ExactMatchDataset(data_args, tokenizer, cache_dir=data_args.data_cache_dir or model_args.cache_dir, set="train")
+    rnd_sampler = RandomSampleNegatives(data_args)
+    data_collator=QPCollator(
+            data_args=data_args,
+            tokenizer=tokenizer,
+            sampler=rnd_sampler
+        )
+    exact_dataloader = ExactMatch_dataloader(train_dataset, data_collator, batch_size=128)
+    train_dataloader = exact_dataloader.get_train_dataloader()
+
+    trainer = Trainer()
