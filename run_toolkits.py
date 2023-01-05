@@ -2,11 +2,13 @@ import os
 import sys
 from trainer.trainer import Trainer
 from .arguments import DataArguments, ModelArguments, TrainingArguments
-from transformers import HfArgumentParser, AutoTokenizer
+from transformers import HfArgumentParser, AutoTokenizer, AutoConfig
 from dataset.data_collator import QPCollator
 from dataset.abstract_dataset import ExactMatchDataset
 from dataloader.exactmatch_dataloader import ExactMatch_dataloader
 from trainer.sampler import RandomSampleNegatives
+from model.biencoder import DRModel
+from transformers import Trainer
 
 
 def main():
@@ -20,14 +22,30 @@ def main():
         data_args: DataArguments
         training_args: TrainingArguments
 
+    num_labels = 1
+
+    config = AutoConfig.from_pretrained(
+        model_args.config_name if model_args.config_name else model_args.model_name_or_path,
+        num_labels=num_labels,
+        cache_dir=model_args.cache_dir,
+    )
+
     tokenizer = AutoTokenizer.from_pretrained(
         model_args.tokenizer_name if model_args.tokenizer_name else model_args.model_name_or_path,
         cache_dir=model_args.cache_dir
     )
+
+    model = DRModel.build(
+        model_args=model_args,
+        data_args=data_args,
+        train_args=training_args,
+        config=config,
+        cache_dir=model_args.cache_dir,
+    )
     
     train_dataset = ExactMatchDataset(data_args, tokenizer, cache_dir=data_args.data_cache_dir or model_args.cache_dir, set="train")
     rnd_sampler = RandomSampleNegatives(data_args)
-    data_collator=QPCollator(
+    data_collator = QPCollator(
             data_args=data_args,
             tokenizer=tokenizer,
             sampler=rnd_sampler
@@ -35,4 +53,10 @@ def main():
     exact_dataloader = ExactMatch_dataloader(train_dataset, data_collator, batch_size=128)
     train_dataloader = exact_dataloader.get_train_dataloader()
 
-    trainer = Trainer()
+    trainer = Trainer(training_args, model, train_dataloader, eval_loader=None, test_loader=None)
+    trainer.train()
+    trainer.save_model()
+
+
+if __name__=='__main__':
+    main()

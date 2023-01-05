@@ -7,13 +7,14 @@ import torch.nn as nn
 from torch import optim
 import torchvision
 import torchvision.transforms as transforms
+
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.utils.data import RandomSampler
 from torch.utils.data.distributed import DistributedSampler
 import collections
 import transformers
 from transformers import AutoModelForCausalLM, AutoConfig
-from ..model.biencoder import DRModelForInference
+from ..model.biencoder import DRModelForInference, DRModel
 from tqdm import tqdm
 from .scheduler import (
     AbstractScheduler, InverseSquareRootScheduler, CosineScheduler, LinearScheduler, ConstantScheduler
@@ -27,18 +28,16 @@ logger = logging.getLogger(__name__)
 
 
 class Trainer:
-    def __init__(self, config, model, train_set=None, eval_set=None, test_set=None):
+    def __init__(self, training_args, model, train_loader=None, eval_loader=None, test_loader=None):
         # --__init__: 初始化，设置模型、损失函数、数据类型，设置训练过程与评测方法
-        self.config = config
+        self.training_args = training_args
         self._wrapper_model(model)
-        self.loss_fn = get_loss_function(config)
-        if config.do_train:
-            self.train_set = train_set
-        if config.do_eval:
-            self.eval_set = eval_set
-        if config.do_test:
-            self.test_set = test_set
-        self.eval_method = config.eval_method
+        self.loss_fn = get_loss_function(training_args)
+        self.train_loader = train_loader
+        self.eval_loader = eval_loader
+        self.test_loader = test_loader
+        self.start_epoch = 0
+        self.eval_method = training_args.eval_method
 
     def _wrapper_model(self):
         self.rank = int(os.environ["RANK"])
@@ -54,38 +53,38 @@ class Trainer:
         # DistributedDataParallel
         self.model = DDP(self.model, device_ids=[self.local_rank], output_device=self.local_rank, find_unused_parameters=True)
 
-        # 2. define data_loader
-        if self.config.do_train:
-            self.train_batch_size = int(
-                self.config.train_batch_size / self.config.gradient_accumulation_steps)
-            train_sampler = DistributedSampler(self.train_set, shuffle=True)
-            self.train_loader = torch.utils.data.DataLoader(
-                self.train_set,
-                batch_size=self.train_batch_size,
-                num_workers=self.config.num_workers,
-                pin_memory=True,
-                sampler=train_sampler,
-            )
-        if self.config.do_eval:
-            eval_sampler = DistributedSampler(self.eval_set, shuffle=False)
-            self.eval_loader = torch.utils.data.DataLoader(
-                self.eval_set,
-                batch_size=self.config.eval_batch_size,
-                num_workers=self.config.num_workers,
-                pin_memory=True,
-                sampler=eval_sampler,
-            )
+        # # 2. define data_loader
+        # if self.training_args.do_train:
+        #     self.train_batch_size = int(
+        #         self.training_args.train_batch_size / self.training_args.gradient_accumulation_steps)
+        #     train_sampler = DistributedSampler(self.train_set, shuffle=True)
+        #     self.train_loader = torch.utils.data.DataLoader(
+        #         self.train_set,
+        #         batch_size=self.train_batch_size,
+        #         num_workers=self.training_args.num_workers,
+        #         pin_memory=True,
+        #         sampler=train_sampler,
+        #     )
+        # if self.training_args.do_eval:
+        #     eval_sampler = DistributedSampler(self.eval_set, shuffle=False)
+        #     self.eval_loader = torch.utils.data.DataLoader(
+        #         self.eval_set,
+        #         batch_size=self.training_args.eval_batch_size,
+        #         num_workers=self.training_args.num_workers,
+        #         pin_memory=True,
+        #         sampler=eval_sampler,
+        #     )
 
     def _get_get_optimizer_and_scheduler(self):
         # --get_optimizer_and_scheduler: 设置训练相关组件
         self._get_trainable_parameters()
-        optimizer = self.config['optimizer']
-        scheduler = self.config['scheduler']
-        learning_rate = self.config['learning_rate']
-        optimizer_kwargs = {'lr': self.config ['learning_rate']}
-        optimizer_kwargs.update(self.config ['optimizer_kwargs'])
-        adafactor_kwargs = self.config['adafactor_kwargs']
-        scheduler_kwargs = self.config['scheduler_kwargs']
+        optimizer = self.training_args['optimizer']
+        scheduler = self.training_args['scheduler']
+        learning_rate = self.training_args['learning_rate']
+        optimizer_kwargs = {'lr': self.training_args ['learning_rate']}
+        optimizer_kwargs.update(self.training_args ['optimizer_kwargs'])
+        adafactor_kwargs = self.training_args['adafactor_kwargs']
+        scheduler_kwargs = self.training_args['scheduler_kwargs']
         optimizer_class = collections.defaultdict(
             lambda: optim.AdamW, {
                 'adam': optim.Adam,
@@ -138,9 +137,9 @@ class Trainer:
     def train(self):
         # --train: 基于训练数据，迭代训练模型，输出训练后的模型
         self.model.train()
-        max_epoch = self.config.max_epoch
+        max_epoch = self.training_args.max_epoch
         iter_bar = tqdm(self.train_loader, desc='Iter (loss=X.XXX)')
-        for ep in range(1, max_epoch + 1):
+        for ep in range(self.start_epoch, max_epoch):
             # set sampler
             self.train_loader.sampler.set_epoch(ep)
 
@@ -160,30 +159,58 @@ class Trainer:
 
     def evaluate(self, eval_loader):
         # --evaluate: 基于评测数据，评测已训练模型，输出评测结果
-        pass
+        for (batch_ids, batch) in tqdm(eval_loader):
+            lookup_indices.extend(batch_ids)
+            with torch.cuda.amp.autocast() if training_args.fp16 else nullcontext():
+                with torch.no_grad():
+                    for k, v in batch.items():
+                        batch [k] = v.to(training_args.device)
+                    if data_args.encode_is_qry:
+                        model_output: EncoderOutput = model(query=batch)
+                        encoded.append(model_output.q_reps.cpu().detach().numpy())
+                    else:
+                        model_output: EncoderOutput = model(passage=batch)
+                        encoded.append(model_output.p_reps.cpu().detach().numpy())
 
-    def save(self, i_epoch):
+        encoded = np.concatenate(encoded)
+
+        with open(data_args.encoded_save_path, 'wb') as f:
+            pickle.dump((encoded, lookup_indices), f)
+
+    def save(self, i_epoch, output_dir):
         # --save: 保存模型参数到硬盘，包括Optimizer和Scheduler，train_step等，方便断点训练
-        if self.local_rank == -1 or torch.distributed.get_rank() == 0:
-            logger.info("** ** * Saving fine-tuned model and optimizer ** ** * ")
-            model_to_save = self.model.lm_q
-            output_model_file = os.path.join(self.config['output_dir'], "model.{0}.bin".format(i_epoch))
-            torch.save(model_to_save.state_dict(), output_model_file)
-            output_optim_file = os.path.join(self.config['output_dir'], "optim.{0}.bin".format(i_epoch))
-            torch.save(self.optimizer.state_dict(), output_optim_file)
+        # if self.local_rank == -1 or torch.distributed.get_rank() == 0:
+        ckpt = self._get_checkpoint(i_epoch)
+        output_file = os.path.join(output_dir, i_epoch+".bin")
+        torch.save(ckpt, output_file)
 
-    def load(self):
+    def _get_checkpoint(self, i_epoch):
+        # construct state_dict and parameters
+        _state_dict = self.model.get_model_ckpt()
+
+        # get optimizer, config and validation summary
+        checkpoint = {
+            # parameters that needed to be loaded
+            'state_dict': _state_dict,
+            'optimizer': self.optimizer.state_dict(),
+            'epoch': i_epoch,
+        }
+        return checkpoint
+
+    def load(self, filename, ckpt_type=None):
         # --load: 从huggingface或硬盘读取模型参数并初始化，支持他人已预训练的ckpt如下所示
-        if self.config['model_type'] == 'biencoder':
-            config_path = self.config['config_path'] if hasattr(self.config, 'config_path') else self.config['model_path']
-            config_kwargs = self.config['config_kwargs'] or {}
-            configuration = AutoConfig.from_pretrained(config_path, **config_kwargs)
-            transformer = self.model = AutoModelForCausalLM.from_pretrained(self.config['model_path'], config=configuration)
-            self.model = DRModelForInference(transformer, transformer)
+        checkpoint = torch.load(filename, map_location=self.device)
+        if ckpt_type == None:
+            self.start_epoch = checkpoint['epoch'] + 1
+            self.model.load(checkpoint['state_dict'])
+            self.optimizer.load_state_dict(checkpoint['optimizer'])
+
+
+
 
 
 # --train_step: 基于每个batch数据，更新模型参数，支持双塔单独训练与单塔双塔蒸馏
 # --evaluate: 基于评测数据，评测已训练模型，输出评测结果
 # --evaluate_step: 基于每个batch数据，得到评测结果并存储
-# --save: 保存模型参数到硬盘，包括Optimizer和Scheduler，train_step等，方便断点训练
+# --save: 保存模型参数到硬盘，包括Op，方便断点训练
 # --load: 从huggingface或硬盘读取模型参数并初始化，支持他人已预训练的ckpt如下所示：

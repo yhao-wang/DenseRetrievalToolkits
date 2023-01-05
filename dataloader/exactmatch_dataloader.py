@@ -1,4 +1,6 @@
 from torch.utils.data import DataLoader
+from torch.utils.data.distributed import DistributedSampler
+from transformers import Trainer
 
 class ExactMatch_dataloader:
     def __init__(self, dataset, data_collater, batch_size=1, shuffle=False, num_workers=1):
@@ -7,6 +9,7 @@ class ExactMatch_dataloader:
         self.shuffle = shuffle
         self.num_workers = num_workers
         self.data_collater = data_collater
+        self.sampler = DistributedSampler(self.dataset, shuffle=shuffle)
     
     def get_train_dataloader(self):
         return DataLoader(
@@ -14,7 +17,8 @@ class ExactMatch_dataloader:
             batch_size=self.batch_size, 
             shuffle=self.shuffle, 
             num_workers=self.num_workers, 
-            collate_fn=self.data_collater
+            collate_fn=self.data_collater,
+            sampler=self.sampler
             )
 
     def get_query_dataloader(self):
@@ -23,7 +27,8 @@ class ExactMatch_dataloader:
             batch_size=self.batch_size, 
             shuffle=self.shuffle, 
             num_workers=self.num_workers, 
-            collate_fn=self.data_collater
+            collate_fn=self.data_collater,
+            sampler=self.sampler
             )
 
     def get_corpus_dataloader(self):
@@ -32,5 +37,6 @@ class ExactMatch_dataloader:
             batch_size=self.batch_size, 
             shuffle=self.shuffle, 
             num_workers=self.num_workers, 
-            collate_fn=self.data_collater
+            collate_fn=self.data_collater,
+            sampler=self.sampler
         )

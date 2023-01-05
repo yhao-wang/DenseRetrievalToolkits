@@ -176,14 +176,14 @@ class DRModel(nn.Module):
                 config = json.load(f)
 
         if os.path.isdir(model_args.model_name_or_path) and config is not None:  # not a raw Huggingface model
-            tied = config ["tied"]
+            tied = config["tied"]
             if tied:
                 logger.info(f'loading query model weight from {model_args.model_name_or_path}')
                 lm_q = lm_p = model_class.from_pretrained(
                     model_args.model_name_or_path,
                     **hf_kwargs
                 )
-                if config ["linear_head"]:
+                if config["linear_head"]:
                     head_q = head_p = LinearHead.load(model_args.model_name_or_path)
             else:
                 _qry_model_path = os.path.join(model_args.model_name_or_path, 'query_model')
@@ -255,6 +255,13 @@ class DRModel(nn.Module):
         all_tensors = torch.cat(all_tensors, dim=0)
 
         return all_tensors
+
+    def get_model_ckpt(self):
+        return self.lm_q.state_dict()
+
+    def load(self, _state_dict):
+        self.lm_q.load_state_dict(_state_dict)
+        self.lm_p.load_state_dict(_state_dict)
 
 
 class DRModelForInference(DRModel):

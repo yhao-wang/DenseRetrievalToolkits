@@ -16,6 +16,9 @@ class ModelArguments:
     config_name: Optional[str] = field(
         default=None, metadata={"help": "Pretrained config name or path if not the same as model_name"}
     )
+    num_labels: Optional[int] = field(
+        default=1, metadata={"help": "number of labels"}
+    )
     tokenizer_name: Optional[str] = field(
         default=None, metadata={"help": "Pretrained tokenizer name or path if not the same as model_name"}
     )
@@ -129,7 +132,7 @@ class DataArguments:
 
 
 @dataclass
-class TrainingArguments(TrainingArguments):
+class TrainingArguments:
     warmup_ratio: float = field(default=0.1)
     negatives_x_device: bool = field(default=False, metadata={"help": "share negatives across devices"})
     do_encode: bool = field(default=False, metadata={"help": "run the encoding loop"})
