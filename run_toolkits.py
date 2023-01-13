@@ -9,7 +9,7 @@ from DRT.dataloader.exactmatch_dataloader import ExactMatch_dataloader
 from DRT.dataloader.relevancy_dataloader import Relevancy_dataloader
 from DRT.trainer.sampler import RandomSampleNegatives
 from DRT.model.biencoder import DRModel
-from transformers import Trainer
+from DRT.trainer.trainer import Trainer
 
 
 def main():
@@ -51,7 +51,7 @@ def main():
 
     trainer = Trainer(training_args, model, train_dataloader, eval_loader=None, test_loader=None)
     trainer.train()
-    trainer.save_model()
+    trainer.save()
 
     ########encode query and corpus########
     # model_args.model_name_or_path = training_args.output_dir
