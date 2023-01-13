@@ -7,7 +7,8 @@ from transformers import TrainingArguments
 @dataclass
 class ModelArguments:
     model_name_or_path: str = field(
-        metadata={"help": "Path to pretrained model or model identifier from huggingface.co/models"}
+        metadata={
+            "help": "Path to pretrained model or model identifier from huggingface.co/models"}
     )
     target_model_path: str = field(
         default=None,
@@ -31,9 +32,17 @@ class ModelArguments:
         default=False,
         metadata={"help": "no weight sharing between qry passage encoders"}
     )
+    feature: str = field(
+        default="last_hidden_state",
+        metadata={"help": "What feature to be extracted from the HF PLM"}
+    )
+    pooling: str = field(
+        default="first",
+        metadata={"help": "How to pool the features from the HF PLM"}
+    )
 
     # out projection
-    add_pooler: bool = field(default=False)
+    add_linear_head: bool = field(default=False)
     projection_in_dim: int = field(default=768)
     projection_out_dim: int = field(default=768)
 
@@ -46,9 +55,34 @@ class ModelArguments:
         },
     )
 
+    encoder_only: bool = field(
+        default=False,
+        metadata={"help": "Whether to only use the encoder of T5"}
+    )
+    pos_token: Optional[str] = field(
+        default=None,
+        metadata={"help": "Token that indicates a relevant document"}
+    )
+    neg_token: Optional[str] = field(
+        default=None,
+        metadata={"help": "Token that indicates a irrelevant document"}
+    )
+
+    normalize: bool = field(
+        default=False,
+        metadata={"help": "Whether to normalize the embeddings"}
+    )
+    param_efficient_method: Optional[str] = field(
+        default=None,
+        metadata={"help": "Param efficient method used in model training"}
+    )
+
 
 @dataclass
 class DataArguments:
+    dataset: str = field(
+        default=None, metadata={"help": "dataset name: nq, wq, t, squad, msmacro"}
+    )
     data_dir: str = field(
         default=None, metadata={"help": "Path to train directory"}
     )
@@ -56,7 +90,7 @@ class DataArguments:
         default=None, metadata={"help": "huggingface dataset name"}
     )
     corpus_name: str = field(
-        default=None, metadata={"help": "huggingface corpus dataset name"}
+        default=None, metadata={"help": "huggingface dataset name"}
     )
     corpus_path: str = field(
         default=None, metadata={"help": "corpus dataset path"}
@@ -72,7 +106,8 @@ class DataArguments:
         default=False, metadata={"help": "always use the first negative passages"})
 
     encode_in_path: List[str] = field(default=None, metadata={"help": "Path to data to encode"})
-    encoded_save_path: str = field(default=None, metadata={"help": "where to save the encode"})
+    encodedq_save_path: str = field(default=None, metadata={"help": "where to save the encoded query"})
+    encodedp_save_path: str = field(default=None, metadata={"help": "where to save the encoded passage"})
     encode_is_qry: bool = field(default=False)
     encode_num_shard: int = field(default=1)
     encode_shard_index: int = field(default=0)
@@ -128,7 +163,7 @@ class DataArguments:
                 self.data_path = [self.data_dir]
         else:
             self.data_path = None
-        self.corpus_name = "json" if self.corpus_name is None else self.corpus_path
+        self.corpus_name = "json" if self.corpus_name is None else self.corpus_name
 
 
 @dataclass
