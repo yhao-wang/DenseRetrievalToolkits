@@ -1,8 +1,8 @@
 from torch.utils.data import DataLoader
-
-from dataset.data_collator import EncodeCollator, QPCollator
+from ..dataset.data_collator import EncodeCollator, QPCollator
 from torch.utils.data.distributed import DistributedSampler
 from transformers import Trainer
+
 
 class Relevancy_dataloader:
     def __init__(self, data_args, dataset, tokenizer, neg_sampler, batch_size=1, shuffle=False, num_workers=1):

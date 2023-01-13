@@ -50,7 +50,8 @@ class Trainer:
         # 1. define network
         self.model = self.model.to(self.device)
         # DistributedDataParallel
-        self.model = DDP(self.model, device_ids=[self.local_rank], output_device=self.local_rank, find_unused_parameters=True)
+        if torch.cuda.device_count() > 1:
+            self.model = DDP(self.model, device_ids=[self.local_rank], output_device=self.local_rank, find_unused_parameters=True)
 
         # # 2. define data_loader
         # if self.training_args.do_train:

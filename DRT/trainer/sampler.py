@@ -1,6 +1,5 @@
 import random
-
-from arguments import DataArguments
+from ..arguments import DataArguments
 
 
 class RandomSampleNegatives:

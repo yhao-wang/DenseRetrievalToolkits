@@ -4,8 +4,9 @@ from DRT.trainer.trainer import Trainer
 from DRT.arguments import DataArguments, ModelArguments, TrainingArguments
 from transformers import HfArgumentParser, AutoTokenizer, AutoConfig
 from DRT.dataset.data_collator import QPCollator
-from DRT.dataset.abstract_dataset import ExactMatchDataset
+from DRT.dataset.abstract_dataset import ExactMatchDataset, RelevancyDataset, EXACTMATCH_DATASET
 from DRT.dataloader.exactmatch_dataloader import ExactMatch_dataloader
+from DRT.dataloader.relevancy_dataloader import Relevancy_dataloader
 from DRT.trainer.sampler import RandomSampleNegatives
 from DRT.model.biencoder import DRModel
 from transformers import Trainer
@@ -42,20 +43,11 @@ def main():
         config=config,
         cache_dir=model_args.cache_dir,
     )
-    
+
     dataset = ExactMatchDataset(data_args, tokenizer, cache_dir=data_args.data_cache_dir or model_args.cache_dir) if data_args.dataset in EXACTMATCH_DATASET else RelevancyDataset(data_args, tokenizer, cache_dir=data_args.data_cache_dir or model_args.cache_dir)
     rnd_sampler = RandomSampleNegatives(data_args)
-    dataloader = ExactMatch_dataloader(data_args, dataset, tokenizer, rnd_sampler, batch_size=training_args.per_device_train_batch_size) if data_args.dataset in EXACTMATCH_DATASET else Relevancy_dataloader(dataset, batch_size=training_args.per_device_train_batch_size)
+    dataloader = ExactMatch_dataloader(data_args, dataset, tokenizer, rnd_sampler, batch_size=training_args.train_batch_size) if data_args.dataset in EXACTMATCH_DATASET else Relevancy_dataloader(dataset, batch_size=training_args.train_batch_size)
     train_dataloader = dataloader.get_train_dataloader()
-
-    data_collator = QPCollator(
-            data_args=data_args,
-            tokenizer=tokenizer,
-            sampler=rnd_sampler
-        )
-    batch_size = training_args.train_batch_size
-    exact_dataloader = ExactMatch_dataloader(train_dataset, data_collator, batch_size=128)
-    train_dataloader = exact_dataloader.get_train_dataloader()
 
     trainer = Trainer(training_args, model, train_dataloader, eval_loader=None, test_loader=None)
     trainer.train()
@@ -111,7 +103,5 @@ def main():
     print("ok!")
 
 
-
-
-if __name__=='__main__':
+if __name__ == '__main__':
     main()

@@ -27,7 +27,7 @@ class AbstractDataset(Dataset):
         self.dataset = load_dataset(data_args.dataset_name, data_files=data_args.data_path, cache_dir=self.cache_dir)
         self.train_dataset = self.dataset["train"]
         self.valid_dataset = self.dataset["dev"]
-        self.test_dataset = self.dataset["test"]        
+        self.test_dataset = self.dataset["test"]
         self.tokenizer = tokenizer
         self.data_args = data_args
         self.q_max_len = data_args.q_max_len
@@ -75,7 +75,7 @@ class AbstractDataset(Dataset):
         #     data = [json.loads(line) for line in f]
         #     for c in data:
         #         id_text[c["docid"]] = c["text"]
-                
+
         return id_text
 
     # id2text and tokenize
@@ -101,7 +101,7 @@ class AbstractDataset(Dataset):
         #                                            add_special_tokens=False,
         #                                            max_length=self.p_max_len,
         #                                            truncation=True))
-        
+
         # return {'query': query_ids, 'positives': positive_passages_ids, 'negatives': negative_passages_ids}
 
     def load_train(self, shard_num=1, shard_idx=0):
@@ -116,7 +116,7 @@ class AbstractDataset(Dataset):
         )
         return self.train_dataset
 
-    # TODO 
+    # TODO
     def collect_batch(self):
         pass
 
@@ -130,7 +130,7 @@ class RelevancyDataset(AbstractDataset):
             set: str
     ):
         super().__init__(data_args, tokenizer, cache_dir, set)
-    
+
     def process(self, shard_num=1, shard_idx=0):
         self.train_dataset = self.train_dataset.shard(shard_num, shard_idx)
         self.preprocessor = RelevancyPreProcessor
@@ -142,7 +142,7 @@ class RelevancyDataset(AbstractDataset):
             desc="Running tokenizer on train dataset",
         )
         return answerset
-    
+
     def load_query_data(self, shard_num=1, shard_idx=0):
         self.preprocessor = QueryPreProcessor
         self.test_dataset = self.test_dataset.shard(shard_num, shard_idx)
@@ -154,7 +154,7 @@ class RelevancyDataset(AbstractDataset):
             desc="Running tokenization",
         )
         return query_data
-    
+
     def load_corpus_data(self, shard_num=1, shard_idx=0):
         self.corpus = load_dataset(self.data_args.corpus_name, data_files=self.data_args.corpus_path, cache_dir=self.cache_dir)["train"]
         self.preprocessor = CorpusPreProcessor
@@ -177,7 +177,7 @@ class ExactMatchDataset(AbstractDataset):
             cache_dir: str,
     ):
         super().__init__(data_args, tokenizer, cache_dir)
-    
+
     def process(self, shard_num=1, shard_idx=0):
         self.train_dataset = self.train_dataset.shard(shard_num, shard_idx)
         self.preprocessor = ExactMatchPreProcessor
@@ -201,7 +201,7 @@ class ExactMatchDataset(AbstractDataset):
             desc="Running tokenization",
         )
         return query_data
-    
+
     def load_corpus_data(self, shard_num=1, shard_idx=0):
         self.corpus = load_dataset(self.data_args.corpus_name, data_files=self.data_args.corpus_path, cache_dir=self.cache_dir)["train"]
         self.preprocessor = CorpusPreProcessor
@@ -214,3 +214,7 @@ class ExactMatchDataset(AbstractDataset):
             desc="Running tokenization",
         )
         return corpus_data
+
+
+RELEVANCY_DATASET = ["msmarco"]
+EXACTMATCH_DATASET = ["nq", "wq", "tq", "squad"]
