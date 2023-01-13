@@ -2,6 +2,16 @@ from dataclasses import dataclass
 from typing import List
 from transformers import DataCollatorWithPadding, DefaultDataCollator
 
+def create_one_example(text_encoding: List[int], tokenizer, q_max_len=None, p_max_len=None):
+    item = tokenizer.prepare_for_model(
+        text_encoding,
+        truncation='only_first',
+        max_length=q_max_len if q_max_len else p_max_len,
+        padding=False,
+        return_attention_mask=False,
+        return_token_type_ids=False,
+    )
+    return item
 
 @dataclass
 class QPCollator(DataCollatorWithPadding):
@@ -17,17 +27,6 @@ class QPCollator(DataCollatorWithPadding):
         self.max_q_len = data_args.q_max_len
         self.max_p_len = data_args.p_max_len
 
-    def create_one_example(self, text_encoding: List[int], is_query=False):
-        item = self.tokenizer.prepare_for_model(
-            text_encoding,
-            truncation='only_first',
-            max_length=self.data_args.q_max_len if is_query else self.data_args.p_max_len,
-            padding=False,
-            return_attention_mask=False,
-            return_token_type_ids=False,
-        )
-        return item
-
     def __call__(self, features):
         sampled_features = self.sampler(features)
         qq = sampled_features[0]
@@ -36,11 +35,11 @@ class QPCollator(DataCollatorWithPadding):
         enq = []
         end = []
         for q in qq:
-            enq.append(self.create_one_example(q, is_query=True))
+            enq.append(create_one_example(q, self.tokenizer, q_max_len=self.max_q_len))
         for s in dd:
             one_sample = []
             for d in s:
-                one_sample.append(self.create_one_example(d, is_query=False))
+                one_sample.append(create_one_example(d, self.tokenizer, p_max_len=self.max_p_len))
             end.append(one_sample)
 
         if isinstance(end[0], list):
@@ -64,10 +63,18 @@ class QPCollator(DataCollatorWithPadding):
 
 @dataclass
 class EncodeCollator(DataCollatorWithPadding):
+    def __init__(self, tokenizer, padding, q_max_len=None, p_max_len=None):
+        super().__init__(tokenizer=tokenizer, padding=padding)
+        self.q_max_len = q_max_len
+        self.p_max_len = p_max_len
+
     def __call__(self, features):
-        text_ids = [x[0] for x in features]
-        text_features = [x[1] for x in features]
-        collated_features = super().__call__(text_features)
+        text_ids = [x['query_id'] if 'query_id' in x else x['doc_id'] for x in features]
+        text_features = [x['query'] if 'query' in x else x['text'] for x in features]
+        encoded = []
+        for text in text_features:
+            encoded.append(create_one_example(text, self.tokenizer, q_max_len=self.q_max_len, p_max_len=self.p_max_len))
+        collated_features = super().__call__(encoded)
         return text_ids, collated_features
 
 @dataclass
