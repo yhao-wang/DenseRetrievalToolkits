@@ -39,3 +39,8 @@ class DistributedContrastiveLoss(SimpleContrastiveLoss):
         dist.all_gather(gathered, t)
         gathered[self.rank] = t
         return torch.cat(gathered, dim=0)
+
+
+def get_loss_function(training_args):
+    if training_args.loss_fn == "SimpleContrastiveLoss":
+        return DistributedContrastiveLoss()

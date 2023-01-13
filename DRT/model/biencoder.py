@@ -16,10 +16,10 @@ from transformers import (AutoModel, BatchEncoding, PreTrainedModel,
                           T5EncoderModel)
 from transformers.modeling_outputs import ModelOutput
 
-from ..arguments import DataArguments
-from ..arguments import DRTrainingArguments as TrainingArguments
-from ..arguments import ModelArguments
-from ..utils import mean_pooling
+from DRT.arguments import DataArguments
+from DRT.arguments import TrainingArguments
+from DRT.arguments import ModelArguments
+from .utils import mean_pooling
 from .linear import LinearHead
 
 logger = logging.getLogger(__name__)

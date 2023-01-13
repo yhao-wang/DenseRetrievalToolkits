@@ -1,13 +1,13 @@
 import os
 import sys
-from trainer.trainer import Trainer
-from .arguments import DataArguments, ModelArguments, TrainingArguments
+from DRT.trainer.trainer import Trainer
+from DRT.arguments import DataArguments, ModelArguments, TrainingArguments
 from transformers import HfArgumentParser, AutoTokenizer, AutoConfig
-from dataset.data_collator import QPCollator
-from dataset.abstract_dataset import ExactMatchDataset
-from dataloader.exactmatch_dataloader import ExactMatch_dataloader
-from trainer.sampler import RandomSampleNegatives
-from model.biencoder import DRModel
+from DRT.dataset.data_collator import QPCollator
+from DRT.dataset.abstract_dataset import ExactMatchDataset
+from DRT.dataloader.exactmatch_dataloader import ExactMatch_dataloader
+from DRT.trainer.sampler import RandomSampleNegatives
+from DRT.model.biencoder import DRModel
 from transformers import Trainer
 
 
@@ -50,6 +50,7 @@ def main():
             tokenizer=tokenizer,
             sampler=rnd_sampler
         )
+    batch_size = training_args.train_batch_size
     exact_dataloader = ExactMatch_dataloader(train_dataset, data_collator, batch_size=128)
     train_dataloader = exact_dataloader.get_train_dataloader()
 

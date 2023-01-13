@@ -13,8 +13,7 @@ from torch.utils.data import RandomSampler
 from torch.utils.data.distributed import DistributedSampler
 import collections
 import transformers
-from transformers import AutoModelForCausalLM, AutoConfig
-from ..model.biencoder import DRModelForInference, DRModel
+from .losses import get_loss_function
 from tqdm import tqdm
 from .scheduler import (
     AbstractScheduler, InverseSquareRootScheduler, CosineScheduler, LinearScheduler, ConstantScheduler
@@ -82,7 +81,7 @@ class Trainer:
         scheduler = self.training_args['scheduler']
         learning_rate = self.training_args['learning_rate']
         optimizer_kwargs = {'lr': self.training_args ['learning_rate']}
-        optimizer_kwargs.update(self.training_args ['optimizer_kwargs'])
+        optimizer_kwargs.update(self.training_args['optimizer_kwargs'])
         adafactor_kwargs = self.training_args['adafactor_kwargs']
         scheduler_kwargs = self.training_args['scheduler_kwargs']
         optimizer_class = collections.defaultdict(
@@ -137,9 +136,9 @@ class Trainer:
     def train(self):
         # --train: 基于训练数据，迭代训练模型，输出训练后的模型
         self.model.train()
-        max_epoch = self.training_args.max_epoch
+        max_epochs = self.training_args.max_epochs
         iter_bar = tqdm(self.train_loader, desc='Iter (loss=X.XXX)')
-        for ep in range(self.start_epoch, max_epoch):
+        for ep in range(self.start_epoch, max_epochs):
             # set sampler
             self.train_loader.sampler.set_epoch(ep)
 
@@ -158,24 +157,25 @@ class Trainer:
         pass
 
     def evaluate(self, eval_loader):
+        pass
         # --evaluate: 基于评测数据，评测已训练模型，输出评测结果
-        for (batch_ids, batch) in tqdm(eval_loader):
-            lookup_indices.extend(batch_ids)
-            with torch.cuda.amp.autocast() if training_args.fp16 else nullcontext():
-                with torch.no_grad():
-                    for k, v in batch.items():
-                        batch [k] = v.to(training_args.device)
-                    if data_args.encode_is_qry:
-                        model_output: EncoderOutput = model(query=batch)
-                        encoded.append(model_output.q_reps.cpu().detach().numpy())
-                    else:
-                        model_output: EncoderOutput = model(passage=batch)
-                        encoded.append(model_output.p_reps.cpu().detach().numpy())
-
-        encoded = np.concatenate(encoded)
-
-        with open(data_args.encoded_save_path, 'wb') as f:
-            pickle.dump((encoded, lookup_indices), f)
+        # for (batch_ids, batch) in tqdm(eval_loader):
+        #     lookup_indices.extend(batch_ids)
+        #     with torch.cuda.amp.autocast() if training_args.fp16 else nullcontext():
+        #         with torch.no_grad():
+        #             for k, v in batch.items():
+        #                 batch [k] = v.to(training_args.device)
+        #             if data_args.encode_is_qry:
+        #                 model_output: EncoderOutput = model(query=batch)
+        #                 encoded.append(model_output.q_reps.cpu().detach().numpy())
+        #             else:
+        #                 model_output: EncoderOutput = model(passage=batch)
+        #                 encoded.append(model_output.p_reps.cpu().detach().numpy())
+        #
+        # encoded = np.concatenate(encoded)
+        #
+        # with open(data_args.encoded_save_path, 'wb') as f:
+        #     pickle.dump((encoded, lookup_indices), f)
 
     def save(self, i_epoch, output_dir):
         # --save: 保存模型参数到硬盘，包括Optimizer和Scheduler，train_step等，方便断点训练

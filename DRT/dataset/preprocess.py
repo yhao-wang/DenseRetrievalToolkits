@@ -89,17 +89,17 @@ class CorpusPreProcessor:
                                      truncation=True)
         return {'doc_id': docid, 'text': text}
 
-class CorpusIdPreProcessor:
-    def __init__(self, tokenizer, text_max_length=256, separator=' '):
-        self.tokenizer = tokenizer
-        self.text_max_length = text_max_length
-        self.separator = separator
+# class CorpusIdPreProcessor:
+#     def __init__(self, tokenizer, text_max_length=256, separator=' '):
+#         self.tokenizer = tokenizer
+#         self.text_max_length = text_max_length
+#         self.separator = separator
 
-    def __call__(self, example):
-        docid = example['docid']
-        text = example['title'] + self.separator + example['text'] if 'title' in example else example['text']
-        text = self.tokenizer.encode(text,
-                                     add_special_tokens=False,
-                                     max_length=self.text_max_length,
-                                     truncation=True)
-        return {docid, text}
+#     def __call__(self, example):
+#         docid = example['docid']
+#         text = example['title'] + self.separator + example['text'] if 'title' in example else example['text']
+#         text = self.tokenizer.encode(text,
+#                                      add_special_tokens=False,
+#                                      max_length=self.text_max_length,
+#                                      truncation=True)
+#         return {docid, text}

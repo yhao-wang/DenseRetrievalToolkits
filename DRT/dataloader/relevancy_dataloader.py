@@ -10,7 +10,7 @@ class Relevancy_dataloader:
     
     def get_train_dataloader(self):
         return DataLoader(
-            self.dataset, 
+            self.dataset.load_train(), 
             batch_size=self.batch_size, 
             shuffle=self.shuffle, 
             num_workers=self.num_workers, 
