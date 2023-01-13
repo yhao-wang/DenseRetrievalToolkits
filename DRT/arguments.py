@@ -7,7 +7,8 @@ from transformers import TrainingArguments
 @dataclass
 class ModelArguments:
     model_name_or_path: str = field(
-        metadata={"help": "Path to pretrained model or model identifier from huggingface.co/models"}
+        metadata={
+            "help": "Path to pretrained model or model identifier from huggingface.co/models"}
     )
     target_model_path: str = field(
         default=None,
@@ -15,6 +16,9 @@ class ModelArguments:
     )
     config_name: Optional[str] = field(
         default=None, metadata={"help": "Pretrained config name or path if not the same as model_name"}
+    )
+    num_labels: Optional[int] = field(
+        default=1, metadata={"help": "number of labels"}
     )
     tokenizer_name: Optional[str] = field(
         default=None, metadata={"help": "Pretrained tokenizer name or path if not the same as model_name"}
@@ -67,6 +71,10 @@ class ModelArguments:
     normalize: bool = field(
         default=False,
         metadata={"help": "Whether to normalize the embeddings"}
+    )
+    param_efficient_method: Optional[str] = field(
+        default=None,
+        metadata={"help": "Param efficient method used in model training"}
     )
 
 

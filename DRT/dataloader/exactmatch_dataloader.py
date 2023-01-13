@@ -1,6 +1,7 @@
 from torch.utils.data import DataLoader
 from torch.utils.data.distributed import DistributedSampler
 from ..dataset.data_collator import EncodeCollator, QPCollator
+from dataset.data_collator import EncodeCollator, QPCollator
 
 
 class ExactMatch_dataloader:
@@ -12,12 +13,12 @@ class ExactMatch_dataloader:
         self.data_args = data_args
         self.tokenizer = tokenizer
         self.neg_sampler = neg_sampler
-        self.sampler = DistributedSampler(self.dataset, shuffle=shuffle)
         # self.data_collater = data_collater
+        self.sampler = DistributedSampler(self.dataset, shuffle=shuffle)
     
     def get_train_dataloader(self):
         return DataLoader(
-            self.dataset.load_train(), 
+            self.dataset.load_train(),
             batch_size=self.batch_size, 
             shuffle=self.shuffle, 
             num_workers=self.num_workers, 
@@ -25,7 +26,8 @@ class ExactMatch_dataloader:
                     data_args=self.data_args,
                     tokenizer=self.tokenizer,
                     sampler=self.neg_sampler
-                )
+                ),
+            sampler=self.sampler
             )
 
     def get_query_dataloader(self):
@@ -40,7 +42,7 @@ class ExactMatch_dataloader:
                 q_max_len=self.data_args.q_max_len
             ),
             sampler=self.sampler
-            )
+        )
 
     def get_corpus_dataloader(self):
         return DataLoader(

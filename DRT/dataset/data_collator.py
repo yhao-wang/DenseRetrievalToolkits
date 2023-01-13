@@ -27,17 +27,6 @@ class QPCollator(DataCollatorWithPadding):
         self.max_q_len = data_args.q_max_len
         self.max_p_len = data_args.p_max_len
 
-    # def create_one_example(self, text_encoding: List[int], is_query=False):
-    #     item = self.tokenizer.prepare_for_model(
-    #         text_encoding,
-    #         truncation='only_first',
-    #         max_length=self.data_args.q_max_len if is_query else self.data_args.p_max_len,
-    #         padding=False,
-    #         return_attention_mask=False,
-    #         return_token_type_ids=False,
-    #     )
-    #     return item
-
     def __call__(self, features):
         sampled_features = self.sampler(features)
         qq = sampled_features[0]
