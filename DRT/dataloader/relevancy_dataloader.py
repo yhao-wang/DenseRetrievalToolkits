@@ -1,7 +1,7 @@
-from torch.utils.data import DataLoader
-from ..dataset.data_collator import EncodeCollator, QPCollator
+from torch.utils.data import DataLoader, RandomSampler, SequentialSampler
 from torch.utils.data.distributed import DistributedSampler
-from transformers import Trainer
+from torch.cuda import device_count
+from ..dataset.data_collator import EncodeCollator, QPCollator
 
 
 class Relevancy_dataloader:
@@ -13,12 +13,21 @@ class Relevancy_dataloader:
         self.data_args = data_args
         self.tokenizer = tokenizer
         self.neg_sampler = neg_sampler
-        # self.data_collater = data_collater
-        self.sampler = DistributedSampler(self.dataset, shuffle=shuffle)
-    
+
+    def get_sampler(self):
+        if device_count() > 1:
+            self.sampler = DistributedSampler(self.dataset, shuffle=shuffle)
+        else:
+            if self.shuffle:
+                self.sampler = RandomSampler(self.dataset)
+            else:
+                self.sampler = SequentialSampler(self.dataset)
+
     def get_train_dataloader(self):
+        self.dataset = self.dataset.load_train()
+        self.get_sampler()
         return DataLoader(
-            self.dataset.load_train(), 
+            self.dataset,
             batch_size=self.batch_size, 
             shuffle=self.shuffle, 
             num_workers=self.num_workers, 
@@ -31,8 +40,10 @@ class Relevancy_dataloader:
             )
 
     def get_query_dataloader(self):
+        self.dataset = self.dataset.load_query_data()
+        self.get_sampler()
         return DataLoader(
-            self.dataset.load_query_data(),
+            self.dataset,
             batch_size=self.batch_size, 
             shuffle=self.shuffle, 
             num_workers=self.num_workers, 
@@ -42,11 +53,13 @@ class Relevancy_dataloader:
                 q_max_len=self.data_args.q_max_len
             ),
             sampler=self.sampler
-            )
+        )
 
     def get_corpus_dataloader(self):
+        self.dataset = self.dataset.load_corpus_data()
+        self.get_sampler()
         return DataLoader(
-            self.dataset.load_corpus_data(),
+            self.dataset,
             batch_size=self.batch_size, 
             shuffle=self.shuffle, 
             num_workers=self.num_workers, 
