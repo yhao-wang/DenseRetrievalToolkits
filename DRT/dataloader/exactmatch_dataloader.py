@@ -1,4 +1,4 @@
-from torch.utils.data import DataLoader, RandomSampler
+from torch.utils.data import DataLoader, RandomSampler, SequentialSampler
 from torch.utils.data.distributed import DistributedSampler
 from torch.cuda import device_count
 from ..dataset.data_collator import EncodeCollator, QPCollator
@@ -13,15 +13,21 @@ class ExactMatch_dataloader:
         self.data_args = data_args
         self.tokenizer = tokenizer
         self.neg_sampler = neg_sampler
-        # self.data_collater = data_collater
+
+    def get_sampler(self):
         if device_count() > 1:
             self.sampler = DistributedSampler(self.dataset, shuffle=shuffle)
         else:
-            self.sampler = RandomSampler(self.dataset)
+            if self.shuffle:
+                self.sampler = RandomSampler(self.dataset)
+            else:
+                self.sampler = SequentialSampler(self.dataset)
 
     def get_train_dataloader(self):
+        self.dataset = self.dataset.load_train()
+        self.get_sampler()
         return DataLoader(
-            self.dataset.load_train(),
+            self.dataset,
             batch_size=self.batch_size, 
             shuffle=self.shuffle, 
             num_workers=self.num_workers, 
@@ -34,8 +40,10 @@ class ExactMatch_dataloader:
             )
 
     def get_query_dataloader(self):
+        self.dataset = self.dataset.load_query_data()
+        self.get_sampler()
         return DataLoader(
-            self.dataset.load_query_data(),
+            self.dataset,
             batch_size=self.batch_size, 
             shuffle=self.shuffle, 
             num_workers=self.num_workers, 
@@ -48,8 +56,10 @@ class ExactMatch_dataloader:
         )
 
     def get_corpus_dataloader(self):
+        self.dataset = self.dataset.load_corpus_data()
+        self.get_sampler()
         return DataLoader(
-            self.dataset.load_corpus_data(),
+            self.dataset,
             batch_size=self.batch_size, 
             shuffle=self.shuffle, 
             num_workers=self.num_workers, 
