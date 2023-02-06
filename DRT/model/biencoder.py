@@ -90,7 +90,6 @@ class DRModel(nn.Module):
             query: Dict[str, Tensor] = None,
             passage: Dict[str, Tensor] = None,
     ):
-
         q_hidden, q_reps = self.encode_query(query)
         p_hidden, p_reps = self.encode_passage(passage)
 
@@ -104,10 +103,6 @@ class DRModel(nn.Module):
         if self.train_args.negatives_x_device:
             q_reps = self.dist_gather_tensor(q_reps)
             p_reps = self.dist_gather_tensor(p_reps)
-
-        effective_bsz = self.train_args.per_device_train_batch_size * self.world_size \
-            if self.train_args.negatives_x_device \
-            else self.train_args.per_device_train_batch_size
 
         scores = torch.matmul(q_reps, p_reps.transpose(0, 1))
 

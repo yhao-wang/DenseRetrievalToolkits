@@ -1,4 +1,4 @@
-from torch.utils.data import DataLoader, Sampler
+from torch.utils.data import DataLoader, RandomSampler
 from torch.utils.data.distributed import DistributedSampler
 from torch.cuda import device_count
 from ..dataset.data_collator import EncodeCollator, QPCollator
@@ -17,7 +17,7 @@ class ExactMatch_dataloader:
         if device_count() > 1:
             self.sampler = DistributedSampler(self.dataset, shuffle=shuffle)
         else:
-            self.sampler = Sampler(self.dataset)
+            self.sampler = RandomSampler(self.dataset)
 
     def get_train_dataloader(self):
         return DataLoader(

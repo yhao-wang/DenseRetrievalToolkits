@@ -8,7 +8,6 @@ class SimpleContrastiveLoss(nn.Module):
     def __init__(self):
         super(SimpleContrastiveLoss, self).__init__()
 
-    @staticmethod
     def forward(self, x: Tensor, y: Tensor, target: Tensor = None, reduction: str = 'mean'):
         if target is None:
             target_per_qry = y.size(0) // x.size(0)
@@ -29,7 +28,7 @@ class DistributedContrastiveLoss(SimpleContrastiveLoss):
     def forward(self, x: Tensor, y: Tensor, **kwargs):
         dist_x = self.gather_tensor(x)
         dist_y = self.gather_tensor(y)
-        loss = super().__call__(dist_x, dist_y, **kwargs)
+        loss = super(DistributedContrastiveLoss, self).forward(dist_x, dist_y, **kwargs)
         if self.scale_loss:
             loss = loss * self.word_size
         return loss

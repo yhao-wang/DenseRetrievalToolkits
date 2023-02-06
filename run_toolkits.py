@@ -49,7 +49,9 @@ def main():
     dataloader = ExactMatch_dataloader(data_args, dataset, tokenizer, rnd_sampler, batch_size=training_args.train_batch_size) if data_args.dataset in EXACTMATCH_DATASET else Relevancy_dataloader(dataset, batch_size=training_args.train_batch_size)
     train_dataloader = dataloader.get_train_dataloader()
 
-    trainer = Trainer(training_args, model, train_dataloader, eval_loader=None, test_loader=None)
+    # from transformers.trainer import Trainer
+
+    trainer = Trainer(training_args, model, train_loader=train_dataloader, eval_loader=None, test_loader=None)
     trainer.train()
     trainer.save()
 

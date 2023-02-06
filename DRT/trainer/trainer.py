@@ -5,6 +5,7 @@ import torch
 import torch.distributed as dist
 import torch.nn as nn
 from torch import optim
+from typing import Any, Dict, List, Optional, Tuple, Union
 import torchvision
 import torchvision.transforms as transforms
 
@@ -30,20 +31,26 @@ class Trainer:
     def __init__(self, training_args, model, train_loader=None, eval_loader=None, test_loader=None):
         # --__init__: 初始化，设置模型、损失函数、数据类型，设置训练过程与评测方法
         self.training_args = training_args
-        self._wrapper_model(model)
+        self.model = model
+        self._wrapper_model()
         self.loss_fn = get_loss_function(training_args)
         self.train_loader = train_loader
+        self._get_get_optimizer_and_scheduler()
         self.eval_loader = eval_loader
         self.test_loader = test_loader
         self.start_epoch = 0
         self.eval_method = training_args.eval_method
 
     def _wrapper_model(self):
-        self.rank = int(os.environ["RANK"])
-        self.local_rank = int(os.environ["LOCAL_RANK"])
+        os.environ['RANK'] = '0'
+        os.environ['LOCAL_RANK'] = '-1'
+
+        self.rank = int(os.environ["RANK"]) if hasattr(os.environ, "RANK") else 0
+        self.local_rank = int(os.environ["LOCAL_RANK"]) if hasattr(os.environ, "LOCAL_RANK") else 0
         torch.cuda.set_device(self.rank % torch.cuda.device_count())
         dist.init_process_group(backend="nccl")
         self.device = torch.device("cuda", self.local_rank)
+
 
         logger.info(f"[init] == local rank: {self.local_rank}, global rank: {self.rank} ==")
 
@@ -78,13 +85,13 @@ class Trainer:
     def _get_get_optimizer_and_scheduler(self):
         # --get_optimizer_and_scheduler: 设置训练相关组件
         self._get_trainable_parameters()
-        optimizer = self.training_args['optimizer']
-        scheduler = self.training_args['scheduler']
-        learning_rate = self.training_args['learning_rate']
-        optimizer_kwargs = {'lr': self.training_args ['learning_rate']}
-        optimizer_kwargs.update(self.training_args['optimizer_kwargs'])
-        adafactor_kwargs = self.training_args['adafactor_kwargs']
-        scheduler_kwargs = self.training_args['scheduler_kwargs']
+        optimizer = self.training_args.optimizer
+        scheduler = self.training_args.scheduler
+        learning_rate = self.training_args.learning_rate
+        optimizer_kwargs = {'lr': self.training_args.learning_rate}
+        optimizer_kwargs.update(self.training_args.optimizer_kwargs)
+        adafactor_kwargs = self.training_args.adafactor_kwargs
+        scheduler_kwargs = self.training_args.scheduler_kwargs
         optimizer_class = collections.defaultdict(
             lambda: optim.AdamW, {
                 'adam': optim.Adam,
@@ -128,10 +135,20 @@ class Trainer:
     def _get_trainable_parameters(self):
         self._trainable_parameters = filter(lambda x: x.requires_grad, self.model.parameters())
 
-    def train_step(self, batch):
+    def train_step(self, inputs):
         # --train_step: 基于每个batch数据，更新模型参数，支持双塔单独训练与单塔双塔蒸馏
-        encoder_outputs = self.model(batch)
-        loss = self.loss_fn(encoder_outputs)
+        inputs = {
+            "query": inputs[0],
+            "passage": inputs[1],
+        }
+        encoded = self.model(**inputs)
+        q_rep = encoded.q_reps
+        p_rep = encoded.q_reps
+        inputs = {
+            "x": q_rep.contiguous(),
+            "y": p_rep.contiguous(),
+        }
+        loss = self.loss_fn(**inputs)
         return loss
 
     def train(self):
@@ -139,17 +156,61 @@ class Trainer:
         self.model.train()
         max_epochs = self.training_args.max_epochs
         iter_bar = tqdm(self.train_loader, desc='Iter (loss=X.XXX)')
+
+        # query_dataloader = dataloader.get_query_dataloader()
+
+        # encoded_q = []
+        # lookup_indices = []
+        # model = model.to(training_args.device)
+        # model.eval()
+
+        # for (batch_ids, batch) in tqdm(query_dataloader):
+        #     lookup_indices.extend(batch_ids)
+        #     with torch.cuda.amp.autocast() if training_args.fp16 else nullcontext():
+        #         with torch.no_grad():
+        #             for k, v in batch.items():
+        #                 batch[k] = v.to(training_args.device)
+        #             model_output: DROutput = model(query=batch)
+        #             encoded_q.append(model_output.q_reps.cpu().detach().numpy())
+
+        # encoded_q = np.concatenate(encoded_q)
+
+        # with open(data_args.encodedq_save_path, 'wb') as f:
+        #     pickle.dump((encoded_q, lookup_indices), f)
+
+        # corpus_dataloader = dataloader.get_corpus_dataloader()
+        # encoded_p = []
+        # lookup_indices = []
+
+        # for (batch_ids, batch) in tqdm(corpus_dataloader):
+        #     lookup_indices.extend(batch_ids)
+        #     with torch.cuda.amp.autocast() if training_args.fp16 else nullcontext():
+        #         with torch.no_grad():
+        #             for k, v in batch.items():
+        #                 batch[k] = v.to(training_args.device)
+        #             model_output: DROutput = model(passage=batch)
+        #             encoded_p.append(model_output.p_reps.cpu().detach().numpy())
+
+        # encoded_p = np.concatenate(encoded_p)
+
         for ep in range(self.start_epoch, max_epochs):
             # set sampler
-            self.train_loader.sampler.set_epoch(ep)
+            if torch.cuda.device_count() > 1:
+                self.train_loader.sampler.set_epoch(ep)
 
             for idx, batch in enumerate(iter_bar):
-                batch = {
-                    k: v.to(self.device) if v is not None else None for k, v in batch.items()}
-                loss = self.train_step(batch)
+                prepared = []
+                for data in batch:
+                    data = {
+                        k: v.to(self.device) if v is not None else None for k, v in data.items()}
+                    prepared.append(data)
+                loss = self.train_step(prepared)
                 self.optimizer.zero_grad()
                 loss.backward()
                 self.optimizer.step()
+
+                import pdb
+                pdb.set_trace()
 
                 iter_bar.set_description('Iter (loss=%5.3f)' % loss.item())
 

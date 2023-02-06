@@ -2,6 +2,7 @@ from dataclasses import dataclass
 from typing import List
 from transformers import DataCollatorWithPadding, DefaultDataCollator
 
+
 def create_one_example(text_encoding: List[int], tokenizer, q_max_len=None, p_max_len=None):
     item = tokenizer.prepare_for_model(
         text_encoding,
@@ -12,6 +13,7 @@ def create_one_example(text_encoding: List[int], tokenizer, q_max_len=None, p_ma
         return_token_type_ids=False,
     )
     return item
+
 
 @dataclass
 class QPCollator(DataCollatorWithPadding):

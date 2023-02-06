@@ -1,7 +1,7 @@
 import os
 from dataclasses import dataclass, field
 from typing import Optional, List
-from transformers import TrainingArguments
+from transformers import TrainingArguments, Trainer
 
 
 @dataclass
@@ -171,6 +171,7 @@ class TrainingArguments:
     output_dir: str = field(
         metadata={"help": "The output directory where the model predictions and checkpoints will be written."},
     )
+    local_rank: int = field(default=0)
     warmup_ratio: float = field(default=0.1)
     negatives_x_device: bool = field(default=False, metadata={"help": "share negatives across devices"})
     do_encode: bool = field(default=False, metadata={"help": "run the encoding loop"})
