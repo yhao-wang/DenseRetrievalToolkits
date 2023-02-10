@@ -3,7 +3,6 @@ import sys
 from DRT.trainer.trainer import Trainer
 from DRT.arguments import DataArguments, ModelArguments, TrainingArguments
 from transformers import HfArgumentParser, AutoTokenizer, AutoConfig
-from DRT.dataset.data_collator import QPCollator
 from DRT.dataset.abstract_dataset import ExactMatchDataset, RelevancyDataset, EXACTMATCH_DATASET
 from DRT.dataloader.exactmatch_dataloader import ExactMatch_dataloader
 from DRT.dataloader.relevancy_dataloader import Relevancy_dataloader
@@ -47,11 +46,11 @@ def main():
     dataset = ExactMatchDataset(data_args, tokenizer, cache_dir=data_args.data_cache_dir or model_args.cache_dir) if data_args.dataset in EXACTMATCH_DATASET else RelevancyDataset(data_args, tokenizer, cache_dir=data_args.data_cache_dir or model_args.cache_dir)
     rnd_sampler = RandomSampleNegatives(data_args)
     dataloader = ExactMatch_dataloader(data_args, dataset, tokenizer, rnd_sampler, batch_size=training_args.train_batch_size) if data_args.dataset in EXACTMATCH_DATASET else Relevancy_dataloader(dataset, batch_size=training_args.train_batch_size)
-    train_dataloader, eval_dataloader = dataloader.get_train_dataloader()
+    train_dataloader, eval_dataloader, test_dataloader = dataloader.get_train_dataloader()
 
     # from transformers.trainer import Trainer
 
-    trainer = Trainer(training_args, model, train_loader=train_dataloader, eval_loader=eval_dataloader, test_loader=None)
+    trainer = Trainer(training_args, model, train_loader=train_dataloader, eval_loader=eval_dataloader, test_loader=test_dataloader)
     trainer.train()
     # trainer.save()
     trainer.evaluate()

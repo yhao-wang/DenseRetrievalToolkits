@@ -14,18 +14,18 @@ class ExactMatch_dataloader:
         self.tokenizer = tokenizer
         self.neg_sampler = neg_sampler
 
-    def get_sampler(self):
+    def get_sampler(self, dataset):
         if device_count() > 1:
-            self.sampler = DistributedSampler(self.dataset, shuffle=self.shuffle)
+            self.sampler = DistributedSampler(dataset, shuffle=self.shuffle)
         else:
             if self.shuffle:
-                self.sampler = RandomSampler(self.dataset)
+                self.sampler = RandomSampler(dataset)
             else:
-                self.sampler = SequentialSampler(self.dataset)
+                self.sampler = SequentialSampler(dataset)
 
     def get_train_dataloader(self):
-        self.train_dataset, self.eval_dataset = self.dataset.load_train()
-        self.get_sampler()
+        self.train_dataset, self.eval_dataset, self.test_dataset = self.dataset.load_train()
+        self.get_sampler(self.train_dataset)
         train_dataloader = DataLoader(
             self.train_dataset,
             batch_size=self.batch_size, 
@@ -38,6 +38,7 @@ class ExactMatch_dataloader:
                 ),
             sampler=self.sampler
             )
+        self.get_sampler(self.eval_dataset)
         eval_dataloader = DataLoader(
             self.eval_dataset,
             batch_size=self.batch_size, 
@@ -50,8 +51,21 @@ class ExactMatch_dataloader:
                 ),
             sampler=self.sampler
             )
+        self.get_sampler(self.test_dataset)
+        test_dataloader = DataLoader(
+            self.test_dataset,
+            batch_size=self.batch_size, 
+            shuffle=self.shuffle, 
+            num_workers=self.num_workers, 
+            collate_fn=QPCollator(
+                    data_args=self.data_args,
+                    tokenizer=self.tokenizer,
+                    sampler=self.neg_sampler
+                ),
+            sampler=self.sampler
+            )
 
-        return train_dataloader, eval_dataloader
+        return train_dataloader, eval_dataloader, test_dataloader
 
     def get_query_dataloader(self):
         self.dataset = self.dataset.load_query_data()
