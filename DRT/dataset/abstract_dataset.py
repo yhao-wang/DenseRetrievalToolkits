@@ -114,7 +114,15 @@ class AbstractDataset(Dataset):
             remove_columns=self.train_dataset.column_names,
             desc="Running tokenizer on train dataset",
         )
-        return self.train_dataset
+        self.valid_dataset = self.valid_dataset.shard(shard_num, shard_idx)
+        self.valid_dataset = self.valid_dataset.map(
+            self.preprocessor(self.tokenizer, self.q_max_len, self.p_max_len, self.separator),
+            batched=False,
+            num_proc=self.proc_num,
+            remove_columns=self.train_dataset.column_names,
+            desc="Running tokenizer on train dataset",
+        )
+        return self.train_dataset, self.valid_dataset
 
     # TODO
     def collect_batch(self):
