@@ -187,6 +187,7 @@ class TrainingArguments:
     adafactor_kwargs: dict = field(default_factory=dict)
     scheduler_kwargs: dict = field(default_factory=dict)
     train_batch_size: int = field(default=128)
+    eval_batch_size: int = field(default=128)
     max_epochs: int = field(default=5)
     decimal_place: int = field(default=2)
     topk: str = field(default="5")

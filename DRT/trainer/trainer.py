@@ -228,13 +228,11 @@ class Trainer:
         # p_reps = p_reps.reshape(q_reps.shape[0], p_reps.shape[0] // q_reps.shape[0], p_reps.shape[1])
         for q_idx, p_idx in enumerate(range(0, p_reps.shape[0], p_per_q)):
             retriever = BaseFaissIPRetriever(p_reps[p_idx: p_idx + p_per_q])
+            retriever.add(p_reps[p_idx: p_idx + p_per_q])
             scores, indices = retriever.search(q_reps, max(self.training_args.topk))
             metrics = get_metrics(indices, self.training_args)
             for k, v in self.metrics_all.items():
                 self.metrics_all[k] = v + metrics[k]
-        import pdb
-        pdb.set_trace()
-        print("hhhh")
 
     def evaluate(self):
         self.model.eval()
