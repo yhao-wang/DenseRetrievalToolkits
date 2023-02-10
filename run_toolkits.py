@@ -52,7 +52,7 @@ def main():
     # from transformers.trainer import Trainer
 
     trainer = Trainer(training_args, model, train_loader=train_dataloader, eval_loader=train_dataloader, test_loader=None)
-    # trainer.train()
+    trainer.train()
     # trainer.save()
     trainer.evaluate()
 
