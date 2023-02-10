@@ -5,6 +5,8 @@ import torch
 import torch.distributed as dist
 import torch.nn as nn
 from torch import optim
+from DRT.evaluator.index import BaseFaissIPRetriever
+from DRT.evaluator.metrics import get_metrics
 from typing import Any, Dict, List, Optional, Tuple, Union
 import torchvision
 import torchvision.transforms as transforms
@@ -40,6 +42,8 @@ class Trainer:
         self.test_loader = test_loader
         self.start_epoch = 0
         self.eval_method = training_args.eval_method
+        if eval_loader is not None:
+            training_args.topk = [int(k) for k in training_args.topk.split(",")]
 
     def _wrapper_model(self):
         os.environ['RANK'] = '0'
@@ -143,7 +147,7 @@ class Trainer:
         }
         encoded = self.model(**inputs)
         q_rep = encoded.q_reps
-        p_rep = encoded.q_reps
+        p_rep = encoded.p_reps
         inputs = {
             "x": q_rep.contiguous(),
             "y": p_rep.contiguous(),
@@ -208,36 +212,48 @@ class Trainer:
                 self.optimizer.zero_grad()
                 loss.backward()
                 self.optimizer.step()
-
-                import pdb
-                pdb.set_trace()
-
                 iter_bar.set_description('Iter (loss=%5.3f)' % loss.item())
 
-    def evaluate_step(self, batch):
+    def evaluate_step(self, inputs):
         # --evaluate_step: 基于每个batch数据，得到评测结果并存储
-        pass
+        inputs = {
+            "query": inputs[0],
+            "passage": inputs[1],
+        }
+        encoded = self.model(**inputs)
+        q_reps = encoded.q_reps.detach().cpu().numpy()
+        p_reps = encoded.p_reps.detach().cpu().numpy()
+        p_per_q = p_reps.shape[0] // q_reps.shape[0]
+        self.eval_num += q_reps.shape[0]
+        # p_reps = p_reps.reshape(q_reps.shape[0], p_reps.shape[0] // q_reps.shape[0], p_reps.shape[1])
+        for q_idx, p_idx in enumerate(range(0, p_reps.shape[0], p_per_q)):
+            retriever = BaseFaissIPRetriever(p_reps[p_idx: p_idx + p_per_q])
+            scores, indices = retriever.search(q_reps, max(self.training_args.topk))
+            metrics = get_metrics(indices, self.training_args)
+            for k, v in self.metrics_all.items():
+                self.metrics_all[k] = v + metrics[k]
+        import pdb
+        pdb.set_trace()
+        print("hhhh")
 
-    def evaluate(self, eval_loader):
-        pass
-        # --evaluate: 基于评测数据，评测已训练模型，输出评测结果
-        # for (batch_ids, batch) in tqdm(eval_loader):
-        #     lookup_indices.extend(batch_ids)
-        #     with torch.cuda.amp.autocast() if training_args.fp16 else nullcontext():
-        #         with torch.no_grad():
-        #             for k, v in batch.items():
-        #                 batch [k] = v.to(training_args.device)
-        #             if data_args.encode_is_qry:
-        #                 model_output: EncoderOutput = model(query=batch)
-        #                 encoded.append(model_output.q_reps.cpu().detach().numpy())
-        #             else:
-        #                 model_output: EncoderOutput = model(passage=batch)
-        #                 encoded.append(model_output.p_reps.cpu().detach().numpy())
-        #
-        # encoded = np.concatenate(encoded)
-        #
-        # with open(data_args.encoded_save_path, 'wb') as f:
-        #     pickle.dump((encoded, lookup_indices), f)
+    def evaluate(self):
+        self.model.eval()
+        self.metrics_all = {}
+        self.eval_num = 0
+        for metric in ["MRR", "NDCG", "Recall"]:
+            for k in self.training_args.topk:
+                self.metrics_all.update({"{}@{}".format(metric, k): 0.0})
+        iter_bar = tqdm(self.eval_loader, desc='Evaluation: ')
+        for idx, batch in enumerate(iter_bar):
+            prepared = []
+            for data in batch:
+                data = {
+                    k: v.to(self.device) if v is not None else None for k, v in data.items()}
+                prepared.append(data)
+            self.evaluate_step(prepared)
+        for k, v in self.metrics_all.items():
+            self.metrics_all[k] = v / self.eval_num
+            print(k, self.metrics_all[k])
 
     def save(self, i_epoch, output_dir):
         # --save: 保存模型参数到硬盘，包括Optimizer和Scheduler，train_step等，方便断点训练

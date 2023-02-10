@@ -188,5 +188,7 @@ class TrainingArguments:
     scheduler_kwargs: dict = field(default_factory=dict)
     train_batch_size: int = field(default=128)
     max_epochs: int = field(default=5)
+    decimal_place: int = field(default=2)
+    topk: str = field(default="5")
     loss_fn: str = field(default="SimpleContrastiveLoss")
     save_steps: int = field(default=500, metadata={"help": "Save checkpoint every X updates steps."})
