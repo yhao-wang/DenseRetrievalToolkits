@@ -252,7 +252,10 @@ class Trainer:
         # --save: 保存模型参数到硬盘，包括Optimizer和Scheduler，train_step等，方便断点训练
         # if self.local_rank == -1 or torch.distributed.get_rank() == 0:
         ckpt = self._get_checkpoint(i_epoch)
-        output_file = os.path.join(self.training_args.output_dir, i_epoch+".bin")
+        output_file = "./" + self.training_args.output_dir
+        if not os.path.exists(output_file):
+            os.mkdir(output_file)
+        output_file += "/" + str(i_epoch) + ".bin"
         torch.save(ckpt, output_file)
 
     def _get_checkpoint(self, i_epoch):
