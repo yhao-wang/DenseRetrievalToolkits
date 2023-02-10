@@ -3,17 +3,10 @@ import logging
 import os
 import torch
 import torch.distributed as dist
-import torch.nn as nn
 from torch import optim
 from DRT.evaluator.index import BaseFaissIPRetriever
 from DRT.evaluator.metrics import get_metrics
-from typing import Any, Dict, List, Optional, Tuple, Union
-import torchvision
-import torchvision.transforms as transforms
-
 from torch.nn.parallel import DistributedDataParallel as DDP
-from torch.utils.data import RandomSampler
-from torch.utils.data.distributed import DistributedSampler
 import collections
 import transformers
 from .losses import get_loss_function
@@ -213,6 +206,8 @@ class Trainer:
                 loss.backward()
                 self.optimizer.step()
                 iter_bar.set_description('Iter (loss=%5.3f)' % loss.item())
+            self.save(ep + 1)
+            self.evaluate()
 
     def evaluate_step(self, inputs):
         # --evaluate_step: 基于每个batch数据，得到评测结果并存储
@@ -253,11 +248,11 @@ class Trainer:
             self.metrics_all[k] = v / self.eval_num
             print(k, self.metrics_all[k])
 
-    def save(self, i_epoch, output_dir):
+    def save(self, i_epoch):
         # --save: 保存模型参数到硬盘，包括Optimizer和Scheduler，train_step等，方便断点训练
         # if self.local_rank == -1 or torch.distributed.get_rank() == 0:
         ckpt = self._get_checkpoint(i_epoch)
-        output_file = os.path.join(output_dir, i_epoch+".bin")
+        output_file = os.path.join(self.training_args.output_dir, i_epoch+".bin")
         torch.save(ckpt, output_file)
 
     def _get_checkpoint(self, i_epoch):

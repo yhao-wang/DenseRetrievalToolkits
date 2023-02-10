@@ -1,6 +1,5 @@
 import os
 import sys
-from DRT.trainer.trainer import Trainer
 from DRT.arguments import DataArguments, ModelArguments, TrainingArguments
 from transformers import HfArgumentParser, AutoTokenizer, AutoConfig
 from DRT.dataset.abstract_dataset import ExactMatchDataset, RelevancyDataset, EXACTMATCH_DATASET
@@ -43,67 +42,16 @@ def main():
         cache_dir=model_args.cache_dir,
     )
 
-    dataset = ExactMatchDataset(data_args, tokenizer, cache_dir=data_args.data_cache_dir or model_args.cache_dir) if data_args.dataset in EXACTMATCH_DATASET else RelevancyDataset(data_args, tokenizer, cache_dir=data_args.data_cache_dir or model_args.cache_dir)
+    batch_size = [training_args.train_batch_size, training_args.eval_batch_size, training_args.test_batch_size]
+    dataset = ExactMatchDataset(data_args, tokenizer, cache_dir=data_args.data_cache_dir or model_args.cache_dir) \
+        if data_args.dataset in EXACTMATCH_DATASET else RelevancyDataset(data_args, tokenizer, cache_dir=data_args.data_cache_dir or model_args.cache_dir)
     rnd_sampler = RandomSampleNegatives(data_args)
-    dataloader = ExactMatch_dataloader(data_args, dataset, tokenizer, rnd_sampler, batch_size=training_args.train_batch_size) if data_args.dataset in EXACTMATCH_DATASET else Relevancy_dataloader(dataset, batch_size=training_args.train_batch_size)
-    train_dataloader, eval_dataloader, test_dataloader = dataloader.get_train_dataloader()
-
-    # from transformers.trainer import Trainer
+    dataloader = ExactMatch_dataloader(data_args, dataset, tokenizer, rnd_sampler, batch_size=batch_size) \
+        if data_args.dataset in EXACTMATCH_DATASET else Relevancy_dataloader(dataset, batch_size=batch_size)
+    train_dataloader, eval_dataloader, test_dataloader = dataloader.get_dataloader()
 
     trainer = Trainer(training_args, model, train_loader=train_dataloader, eval_loader=eval_dataloader, test_loader=test_dataloader)
     trainer.train()
-    # trainer.save()
-    trainer.evaluate()
-
-
-    ########encode query and corpus########
-    # model_args.model_name_or_path = training_args.output_dir
-    # model = DRModelForInference.build(
-    #     model_args=model_args,
-    #     config=config,
-    #     cache_dir=model_args.cache_dir,
-    # )
-
-    # query_dataloader = dataloader.get_query_dataloader()
-
-    # encoded_q = []
-    # lookup_indices = []
-    # model = model.to(training_args.device)
-    # model.eval()
-
-    # for (batch_ids, batch) in tqdm(query_dataloader):
-    #     lookup_indices.extend(batch_ids)
-    #     with torch.cuda.amp.autocast() if training_args.fp16 else nullcontext():
-    #         with torch.no_grad():
-    #             for k, v in batch.items():
-    #                 batch[k] = v.to(training_args.device)
-    #             model_output: DROutput = model(query=batch)
-    #             encoded_q.append(model_output.q_reps.cpu().detach().numpy())
-
-    # encoded_q = np.concatenate(encoded_q)
-
-    # with open(data_args.encodedq_save_path, 'wb') as f:
-    #     pickle.dump((encoded_q, lookup_indices), f)
-
-    # corpus_dataloader = dataloader.get_corpus_dataloader()
-    # encoded_p = []
-    # lookup_indices = []
-
-    # for (batch_ids, batch) in tqdm(corpus_dataloader):
-    #     lookup_indices.extend(batch_ids)
-    #     with torch.cuda.amp.autocast() if training_args.fp16 else nullcontext():
-    #         with torch.no_grad():
-    #             for k, v in batch.items():
-    #                 batch[k] = v.to(training_args.device)
-    #             model_output: DROutput = model(passage=batch)
-    #             encoded_p.append(model_output.p_reps.cpu().detach().numpy())
-
-    # encoded_p = np.concatenate(encoded_p)
-
-    # with open(data_args.encodedp_save_path, 'wb') as f:
-    #     pickle.dump((encoded_p, lookup_indices), f)
-
-    print("ok!")
 
 
 if __name__ == '__main__':

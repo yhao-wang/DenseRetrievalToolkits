@@ -5,7 +5,7 @@ from ..dataset.data_collator import EncodeCollator, QPCollator
 
 
 class Relevancy_dataloader:
-    def __init__(self, data_args, dataset, tokenizer, neg_sampler, batch_size=1, shuffle=False, num_workers=1):
+    def __init__(self, data_args, dataset, tokenizer, neg_sampler, batch_size=[1, 1, 1], shuffle=False, num_workers=1):
         self.dataset = dataset
         self.batch_size = batch_size
         self.shuffle = shuffle
@@ -23,12 +23,12 @@ class Relevancy_dataloader:
             else:
                 self.sampler = SequentialSampler(dataset)
 
-    def get_train_dataloader(self):
+    def get_dataloader(self):
         self.train_dataset, self.eval_dataset, self.test_dataset = self.dataset.load_train()
         self.get_sampler(self.train_dataset)
         train_dataloader = DataLoader(
             self.train_dataset,
-            batch_size=self.batch_size, 
+            batch_size=self.batch_size[0],
             shuffle=self.shuffle, 
             num_workers=self.num_workers, 
             collate_fn=QPCollator(
@@ -41,7 +41,7 @@ class Relevancy_dataloader:
         self.get_sampler(self.eval_dataset)
         eval_dataloader = DataLoader(
             self.eval_dataset,
-            batch_size=self.batch_size, 
+            batch_size=self.batch_size[1],
             shuffle=self.shuffle, 
             num_workers=self.num_workers, 
             collate_fn=QPCollator(
@@ -54,7 +54,7 @@ class Relevancy_dataloader:
         self.get_sampler(self.test_dataset)
         test_dataloader = DataLoader(
             self.test_dataset,
-            batch_size=self.batch_size, 
+            batch_size=self.batch_size[2],
             shuffle=self.shuffle, 
             num_workers=self.num_workers, 
             collate_fn=QPCollator(
