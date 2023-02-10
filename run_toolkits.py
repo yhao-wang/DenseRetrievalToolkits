@@ -51,9 +51,11 @@ def main():
 
     # from transformers.trainer import Trainer
 
-    trainer = Trainer(training_args, model, train_loader=train_dataloader, eval_loader=None, test_loader=None)
+    trainer = Trainer(training_args, model, train_loader=train_dataloader, eval_loader=eval_dataloader, test_loader=None)
     trainer.train()
-    trainer.save()
+    # trainer.save()
+    trainer.evaluate()
+
 
     ########encode query and corpus########
     # model_args.model_name_or_path = training_args.output_dir

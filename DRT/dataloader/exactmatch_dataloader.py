@@ -24,10 +24,10 @@ class ExactMatch_dataloader:
                 self.sampler = SequentialSampler(self.dataset)
 
     def get_train_dataloader(self):
-        self.dataset = self.dataset.load_train()
+        self.train_dataset, self.eval_dataset = self.dataset.load_train()
         self.get_sampler()
-        return DataLoader(
-            self.dataset,
+        train_dataloader = DataLoader(
+            self.train_dataset,
             batch_size=self.batch_size, 
             shuffle=self.shuffle, 
             num_workers=self.num_workers, 
@@ -38,6 +38,20 @@ class ExactMatch_dataloader:
                 ),
             sampler=self.sampler
             )
+        eval_dataloader = DataLoader(
+            self.eval_dataset,
+            batch_size=self.batch_size, 
+            shuffle=self.shuffle, 
+            num_workers=self.num_workers, 
+            collate_fn=QPCollator(
+                    data_args=self.data_args,
+                    tokenizer=self.tokenizer,
+                    sampler=self.neg_sampler
+                ),
+            sampler=self.sampler
+            )
+
+        return train_dataloader, eval_dataloader
 
     def get_query_dataloader(self):
         self.dataset = self.dataset.load_query_data()

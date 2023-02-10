@@ -181,10 +181,10 @@ def mrr_(pos_index, pos_len):
     idxs = pos_index.argmax(axis=1)
     result = np.zeros_like(pos_index, dtype=np.float)
     for row, idx in enumerate(idxs):
-        if pos_index [row, idx] > 0:
-            result [row, idx:] = 1 / (idx + 1)
+        if pos_index[row, idx] > 0:
+            result[row, idx:] = 1 / (idx + 1)
         else:
-            result [row, idx:] = 0
+            result[row, idx:] = 0
     return result
 
 
@@ -225,17 +225,17 @@ def ndcg_(pos_index, pos_len):
     :math:`U^{te}` stands for all users in the test set.
 
     """
-    len_rank = np.full_like(pos_len, pos_index.shape [1])
+    len_rank = np.full_like(pos_len, pos_index.shape[1])
     idcg_len = np.where(pos_len > len_rank, len_rank, pos_len)
 
     iranks = np.zeros_like(pos_index, dtype=np.float)
-    iranks [:, :] = np.arange(1, pos_index.shape [1] + 1)
+    iranks[:, :] = np.arange(1, pos_index.shape[1] + 1)
     idcg = np.cumsum(1.0 / np.log2(iranks + 1), axis=1)
     for row, idx in enumerate(idcg_len):
-        idcg [row, idx:] = idcg [row, idx - 1]
+        idcg[row, idx:] = idcg[row, idx - 1]
 
     ranks = np.zeros_like(pos_index, dtype=np.float)
-    ranks [:, :] = np.arange(1, pos_index.shape [1] + 1)
+    ranks[:, :] = np.arange(1, pos_index.shape[1] + 1)
     dcg = 1.0 / np.log2(ranks + 1)
     dcg = np.cumsum(np.where(pos_index, dcg, 0), axis=1)
 
@@ -243,13 +243,30 @@ def ndcg_(pos_index, pos_len):
     return result
 
 
-def get_metrics(scores, topk=3):
-    k_large_index = [list(map(score.index, heapq.nlargest(topk, score))) for score in scores]
-    pos_index = np.array(k_large_index == 0)
-    pos_len = np.ones(len(pos_index))
-    metrics = {
-        "{}@{}".format("MRR", topk): mrr_(pos_index, pos_len),
-        "{}@{}".format("NDCG", topk): ndcg_(pos_index, pos_len),
-        "{}@{}".format("Recall", topk): recall_(pos_index, pos_len),
-    }
+def topk_result(metric, value, topk, decimal_place):
+    """Match the metric value to the `k` and put them in `dictionary` form.
+    Args:
+        metric(str): the name of calculated metric.
+        value(numpy.ndarray): metrics for each query, including values from `metric@1` to `metric@max(self.topk)`.
+    Returns:
+        dict: metric values required in the configuration.
+    """
+    metric_dict = {}
+    avg_result = value.mean(axis=0)
+    for k in topk:
+        key = "{}@{}".format(metric, k)
+        metric_dict[key] = round(avg_result[k - 1], decimal_place)
+    return metric_dict
+
+
+def get_metrics(indices, training_args):
+    pos_index = np.array(indices == 0)
+    pos_len = np.ones(len(pos_index), dtype=np.int8)
+    topk = training_args.topk
+    decimal_place = training_args.decimal_place
+    metrics = {}
+    metrics.update(topk_result("MRR", mrr_(pos_index, pos_len), topk, decimal_place))
+    metrics.update(topk_result("NDCG", ndcg_(pos_index, pos_len), topk, decimal_place))
+    metrics.update(topk_result("Recall", recall_(pos_index, pos_len), topk, decimal_place))
+
     return metrics

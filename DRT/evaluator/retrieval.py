@@ -28,6 +28,11 @@ def search_queries(retriever, q_reps, p_lookup, args):
     return all_scores, psg_indices
 
 
+def search_queries(retriever, q_reps, depth=1000):
+    all_scores, all_indices = retriever.search(q_reps, depth)
+    return all_scores
+
+
 def write_ranking(corpus_indices, corpus_scores, q_lookup, ranking_save_file):
     with open(ranking_save_file, 'w') as f:
         for qid, q_doc_scores, q_doc_indices in zip(q_lookup, corpus_scores, corpus_indices):
