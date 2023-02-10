@@ -15,7 +15,7 @@ class BaseFaissIPRetriever:
     def add(self, p_reps: np.ndarray):
         self.index.add(p_reps)
 
-    def search(self, q_reps: np.ndarray, k: int):
+    def search(self, q_reps: np.ndarray, k: int = 1000):
         return self.index.search(q_reps, k)
 
     def batch_search(self, q_reps: np.ndarray, k: int, batch_size: int, quiet: bool=False):
