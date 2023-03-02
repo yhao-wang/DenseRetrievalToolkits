@@ -5,71 +5,67 @@ from ..dataset.data_collator import EncodeCollator, QPCollator
 
 
 class Relevancy_dataloader:
-    def __init__(self, data_args, dataset, tokenizer, neg_sampler, batch_size=[1, 1, 1], shuffle=False, num_workers=1):
+    def __init__(self, data_args, dataset, tokenizer, neg_sampler, batch_size=[256, 256, 256], num_workers=1):
         self.dataset = dataset
         self.batch_size = batch_size
-        self.shuffle = shuffle
         self.num_workers = num_workers
         self.data_args = data_args
         self.tokenizer = tokenizer
         self.neg_sampler = neg_sampler
 
-    def get_sampler(self, dataset):
+    def _get_sampler(self, dataset, shuffle=False):
         if device_count() > 1:
-            self.sampler = DistributedSampler(dataset, shuffle=self.shuffle)
+            datset_sampler = DistributedSampler(dataset, shuffle=shuffle)
         else:
-            if self.shuffle:
-                self.sampler = RandomSampler(dataset)
+            if shuffle:
+                datset_sampler = RandomSampler(dataset)
             else:
-                self.sampler = SequentialSampler(dataset)
+                datset_sampler = SequentialSampler(dataset)
+        return datset_sampler
 
     def get_dataloader(self):
         self.train_dataset, self.eval_dataset, self.test_dataset = self.dataset.load_train()
-        self.get_sampler(self.train_dataset)
         train_dataloader = DataLoader(
             self.train_dataset,
             batch_size=self.batch_size[0],
-            shuffle=self.shuffle, 
+            shuffle=False,
             num_workers=self.num_workers, 
             collate_fn=QPCollator(
                     data_args=self.data_args,
                     tokenizer=self.tokenizer,
                     sampler=self.neg_sampler
                 ),
-            sampler=self.sampler
+            sampler=self._get_sampler(self.train_dataset, True)
             )
-        self.get_sampler(self.eval_dataset)
         eval_dataloader = DataLoader(
             self.eval_dataset,
             batch_size=self.batch_size[1],
-            shuffle=self.shuffle, 
+            shuffle=False,
             num_workers=self.num_workers, 
             collate_fn=QPCollator(
                     data_args=self.data_args,
                     tokenizer=self.tokenizer,
                     sampler=self.neg_sampler
                 ),
-            sampler=self.sampler
+            sampler=self._get_sampler(self.eval_dataset),
             )
-        self.get_sampler(self.test_dataset)
         test_dataloader = DataLoader(
             self.test_dataset,
             batch_size=self.batch_size[2],
-            shuffle=self.shuffle, 
+            shuffle=False,
             num_workers=self.num_workers, 
             collate_fn=QPCollator(
                     data_args=self.data_args,
                     tokenizer=self.tokenizer,
                     sampler=self.neg_sampler
                 ),
-            sampler=self.sampler
+            sampler=self._get_sampler(self.test_dataset)
             )
 
         return train_dataloader, eval_dataloader, test_dataloader
 
     def get_query_dataloader(self):
         self.dataset = self.dataset.load_query_data()
-        self.get_sampler()
         return DataLoader(
             self.dataset,
             batch_size=self.batch_size, 
@@ -80,12 +76,11 @@ class Relevancy_dataloader:
                 padding='max_length',
                 q_max_len=self.data_args.q_max_len
             ),
-            sampler=self.sampler
+            sampler=self._get_sampler(self.dataset)
         )
 
     def get_corpus_dataloader(self):
         self.dataset = self.dataset.load_corpus_data()
-        self.get_sampler()
         return DataLoader(
             self.dataset,
             batch_size=self.batch_size, 
@@ -96,5 +91,5 @@ class Relevancy_dataloader:
                 padding='max_length',
                 p_max_len=self.data_args.p_max_len
             ),
-            sampler=self.sampler
+            sampler=self._get_sampler(self.dataset)
         )

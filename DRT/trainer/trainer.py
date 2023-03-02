@@ -39,45 +39,22 @@ class Trainer:
             training_args.topk = [int(k) for k in training_args.topk.split(",")]
 
     def _wrapper_model(self):
-        os.environ['RANK'] = '0'
-        os.environ['LOCAL_RANK'] = '-1'
 
         self.rank = int(os.environ["RANK"]) if hasattr(os.environ, "RANK") else 0
-        self.local_rank = int(os.environ["LOCAL_RANK"]) if hasattr(os.environ, "LOCAL_RANK") else 0
+        self.local_rank = int(os.environ["LOCAL_RANK"]) if "LOCAL_RANK" in os.environ else -1
         torch.cuda.set_device(self.rank % torch.cuda.device_count())
-        dist.init_process_group(backend="nccl")
         self.device = torch.device("cuda", self.local_rank)
 
-
+        dist.barrier()
         logger.info(f"[init] == local rank: {self.local_rank}, global rank: {self.rank} ==")
+        dist.barrier()
 
         # 1. define network
         self.model = self.model.to(self.device)
         # DistributedDataParallel
+        torch.cuda.set_device(self.local_rank)
         if torch.cuda.device_count() > 1:
             self.model = DDP(self.model, device_ids=[self.local_rank], output_device=self.local_rank, find_unused_parameters=True)
-
-        # # 2. define data_loader
-        # if self.training_args.do_train:
-        #     self.train_batch_size = int(
-        #         self.training_args.train_batch_size / self.training_args.gradient_accumulation_steps)
-        #     train_sampler = DistributedSampler(self.train_set, shuffle=True)
-        #     self.train_loader = torch.utils.data.DataLoader(
-        #         self.train_set,
-        #         batch_size=self.train_batch_size,
-        #         num_workers=self.training_args.num_workers,
-        #         pin_memory=True,
-        #         sampler=train_sampler,
-        #     )
-        # if self.training_args.do_eval:
-        #     eval_sampler = DistributedSampler(self.eval_set, shuffle=False)
-        #     self.eval_loader = torch.utils.data.DataLoader(
-        #         self.eval_set,
-        #         batch_size=self.training_args.eval_batch_size,
-        #         num_workers=self.training_args.num_workers,
-        #         pin_memory=True,
-        #         sampler=eval_sampler,
-        #     )
 
     def _get_get_optimizer_and_scheduler(self):
         # --get_optimizer_and_scheduler: 设置训练相关组件
@@ -154,42 +131,6 @@ class Trainer:
         max_epochs = self.training_args.max_epochs
         iter_bar = tqdm(self.train_loader, desc='Iter (loss=X.XXX)')
 
-        # query_dataloader = dataloader.get_query_dataloader()
-
-        # encoded_q = []
-        # lookup_indices = []
-        # model = model.to(training_args.device)
-        # model.eval()
-
-        # for (batch_ids, batch) in tqdm(query_dataloader):
-        #     lookup_indices.extend(batch_ids)
-        #     with torch.cuda.amp.autocast() if training_args.fp16 else nullcontext():
-        #         with torch.no_grad():
-        #             for k, v in batch.items():
-        #                 batch[k] = v.to(training_args.device)
-        #             model_output: DROutput = model(query=batch)
-        #             encoded_q.append(model_output.q_reps.cpu().detach().numpy())
-
-        # encoded_q = np.concatenate(encoded_q)
-
-        # with open(data_args.encodedq_save_path, 'wb') as f:
-        #     pickle.dump((encoded_q, lookup_indices), f)
-
-        # corpus_dataloader = dataloader.get_corpus_dataloader()
-        # encoded_p = []
-        # lookup_indices = []
-
-        # for (batch_ids, batch) in tqdm(corpus_dataloader):
-        #     lookup_indices.extend(batch_ids)
-        #     with torch.cuda.amp.autocast() if training_args.fp16 else nullcontext():
-        #         with torch.no_grad():
-        #             for k, v in batch.items():
-        #                 batch[k] = v.to(training_args.device)
-        #             model_output: DROutput = model(passage=batch)
-        #             encoded_p.append(model_output.p_reps.cpu().detach().numpy())
-
-        # encoded_p = np.concatenate(encoded_p)
-
         for ep in range(self.start_epoch, max_epochs):
             # set sampler
             if torch.cuda.device_count() > 1:
@@ -206,6 +147,7 @@ class Trainer:
                 loss.backward()
                 self.optimizer.step()
                 iter_bar.set_description('Iter (loss=%5.3f)' % loss.item())
+            dist.barrier()
             self.save(ep + 1)
             self.evaluate()
 
@@ -244,23 +186,29 @@ class Trainer:
                     k: v.to(self.device) if v is not None else None for k, v in data.items()}
                 prepared.append(data)
             self.evaluate_step(prepared)
-        for k, v in self.metrics_all.items():
-            self.metrics_all[k] = v / self.eval_num
-            print(k, self.metrics_all[k])
+        dist.barrier()
+        if self.local_rank == -1 or torch.distributed.get_rank() == 0:
+            for k, v in self.metrics_all.items():
+                self.metrics_all[k] = v / self.eval_num
+                print(k, self.metrics_all[k])
 
     def save(self, i_epoch):
         # --save: 保存模型参数到硬盘，包括Optimizer和Scheduler，train_step等，方便断点训练
-        # if self.local_rank == -1 or torch.distributed.get_rank() == 0:
-        ckpt = self._get_checkpoint(i_epoch)
-        output_file = "./" + self.training_args.output_dir
-        if not os.path.exists(output_file):
-            os.mkdir(output_file)
-        output_file += "/" + str(i_epoch) + ".bin"
-        torch.save(ckpt, output_file)
+        if self.local_rank == -1 or torch.distributed.get_rank() == 0:
+            ckpt = self._get_checkpoint(i_epoch)
+            output_path = os.path.abspath(self.training_args.output_dir)
+            if not os.path.exists(output_path):
+                os.mkdir(output_path)
+            file_name = str(i_epoch) + ".bin"
+            output_file = os.path.join(output_path, file_name)
+            torch.save(ckpt, output_file)
 
     def _get_checkpoint(self, i_epoch):
         # construct state_dict and parameters
-        _state_dict = self.model.get_model_ckpt()
+        if torch.cuda.device_count() > 1:
+            _state_dict = self.model.module.get_model_ckpt()
+        else:
+            _state_dict = self.model.get_model_ckpt()
 
         # get optimizer, config and validation summary
         checkpoint = {

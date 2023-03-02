@@ -8,6 +8,7 @@ from DRT.dataloader.relevancy_dataloader import Relevancy_dataloader
 from DRT.trainer.sampler import RandomSampleNegatives
 from DRT.model.biencoder import DRModel
 from DRT.trainer.trainer import Trainer
+# from transformers.trainer import Trainer
 
 
 def main():
@@ -55,4 +56,6 @@ def main():
 
 
 if __name__ == '__main__':
+    import torch.distributed as dist
+    dist.init_process_group(backend='nccl')
     main()
