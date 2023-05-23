@@ -1,7 +1,6 @@
 import os
 from dataclasses import dataclass, field
 from typing import Optional, List
-from transformers import TrainingArguments, Trainer
 
 
 @dataclass
@@ -182,15 +181,46 @@ class TrainingArguments:
     eval_method: str = field(default='metrics')
     optimizer: str = field(default='adam')
     scheduler: str = field(default=None)
-    learning_rate: float = field(default=1e-3)
+    learning_rate: float = field(default=1e-5)
     optimizer_kwargs: dict = field(default_factory=dict)
     adafactor_kwargs: dict = field(default_factory=dict)
     scheduler_kwargs: dict = field(default_factory=dict)
     train_batch_size: int = field(default=128)
     eval_batch_size: int = field(default=128)
     test_batch_size: int = field(default=128)
+    corpus_batch_size: int = field(default=128)
     max_epochs: int = field(default=5)
     decimal_place: int = field(default=2)
-    topk: str = field(default="5")
+    topk: str = field(default="5,10,20")
+    retrieve_num: int = field(default=100)
+    retrieve_dir: str = field(default="")
+    eval_per_train: int = field(default=5)
+    index_order_dir: str = field(default="")
+    rr_result_dir: str = field(default="")
+    encode_corpus_dir: str = field(default="")
     loss_fn: str = field(default="SimpleContrastiveLoss")
-    save_steps: int = field(default=500, metadata={"help": "Save checkpoint every X updates steps."})
+    index_file: str = field(default="")
+    cache_train_dir: str = field(default="/home/wangyuhao/DRT_cache/")
+    save_per_train: int = field(default=10, metadata={"help": "Save checkpoint every X epoches."})
+
+    def __post_init__(self):
+        if self.index_file == '':
+            self.index_file = os.path.join(self.cache_train_dir, 'index_1phrase')
+        if self.retrieve_dir == '':
+            self.retrieve_dir = os.path.join(self.cache_train_dir, 'retrieve')
+        if self.index_order_dir == '':
+            self.index_order_dir = os.path.join(self.cache_train_dir, 'idx')
+        if self.rr_result_dir == '':
+            self.rr_result_dir = os.path.join(self.cache_train_dir, 'rr')
+        if self.encode_corpus_dir == '':
+            self.encode_corpus_dir = os.path.join(self.cache_train_dir, 'encoded_p')
+        for dir in [self.retrieve_dir, self.encode_corpus_dir,  self.rr_result_dir, self.index_order_dir]:
+            os.makedirs(dir, exist_ok=True)
+        if self.save_per_train > self.max_epochs:
+            self.save_per_train = self.max_epochs
+
+
+@dataclass
+class RRTrainingArguments(TrainingArguments):
+    loss_fn: str = field(default="mr")
+    margin: float = field(default=1.0)

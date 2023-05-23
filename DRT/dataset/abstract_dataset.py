@@ -4,12 +4,13 @@ from torch.utils.data import Dataset
 import tqdm
 from transformers import PreTrainedTokenizer
 
-from .preprocess import RelevancyPreProcessor, ExactMatchPreProcessor, QueryPreProcessor, CorpusPreProcessor, TrainPreProcessor
+from .preprocess import RelevancyPreProcessor, ExactMatchPreProcessor, QueryPreProcessor, CorpusPreProcessor, TrainPreProcessor, EvalPreProcessor
 from ..arguments import DataArguments
 
 
 RELEVANCY_DATASET = ["msmarco"]
 EXACTMATCH_DATASET = ["nq", "wq", "tq", "squad"]
+
 
 class AbstractDataset(Dataset):
     def __init__(
@@ -31,6 +32,7 @@ class AbstractDataset(Dataset):
         self.neg_num = data_args.train_n_passages - 1
         self.separator = getattr(self.tokenizer, data_args.passage_field_separator, data_args.passage_field_separator)
         # self.docid2text = self.load_id_text()
+        self.has_load_train = False
 
     def __len__(self):
         return len(self.dataset)
@@ -62,10 +64,12 @@ class AbstractDataset(Dataset):
         # return {'query': query_ids, 'positives': positive_passages_ids, 'negatives': negative_passages_ids}
 
     def load_train(self, shard_num=1, shard_idx=0):
+        if self.has_load_train:
+            return self.train_dataset, self.valid_dataset, self.test_dataset
+        self.has_load_train = True
         self.train_dataset = self.train_dataset.shard(shard_num, shard_idx)
-        self.preprocessor=TrainPreProcessor
         self.train_dataset = self.train_dataset.map(
-            self.preprocessor(self.tokenizer, self.q_max_len, self.p_max_len, self.separator),
+            TrainPreProcessor(self.tokenizer, self.q_max_len, self.p_max_len, self.separator),
             batched=False,
             num_proc=self.proc_num,
             remove_columns=self.train_dataset.column_names,
@@ -73,7 +77,7 @@ class AbstractDataset(Dataset):
         )
         self.valid_dataset = self.valid_dataset.shard(shard_num, shard_idx)
         self.valid_dataset = self.valid_dataset.map(
-            self.preprocessor(self.tokenizer, self.q_max_len, self.p_max_len, self.separator),
+            ExactMatchPreProcessor(self.tokenizer, self.q_max_len),
             batched=False,
             num_proc=self.proc_num,
             remove_columns=self.valid_dataset.column_names,
@@ -81,11 +85,11 @@ class AbstractDataset(Dataset):
         )
         self.test_dataset = self.test_dataset.shard(shard_num, shard_idx)
         self.test_dataset = self.test_dataset.map(
-            self.preprocessor(self.tokenizer, self.q_max_len, self.p_max_len, self.separator),
+            ExactMatchPreProcessor(self.tokenizer, self.q_max_len),
             batched=False,
             num_proc=self.proc_num,
             remove_columns=self.test_dataset.column_names,
-            desc="Running tokenizer on test dataset",
+            desc="Running tokenizer on valid dataset",
         )
         return self.train_dataset, self.valid_dataset, self.test_dataset
 
@@ -100,6 +104,10 @@ class AbstractDataset(Dataset):
             desc="Running tokenization",
         )
         return query_data
+
+    def load_BM25_data(self, shard_num=1, shard_idx=0):
+        self.load_train(shard_num, shard_idx)
+        return self.train_dataset
 
     def load_corpus_data(self, shard_num=1, shard_idx=0):
         self.corpus = load_dataset(self.data_args.corpus_name, data_files=self.data_args.corpus_path, cache_dir=self.cache_dir)["train"]
@@ -212,7 +220,7 @@ class ExactMatchDataset(AbstractDataset):
         )
         return query_data
 
-    def load_corpus_data(self, shard_num=1, shard_idx=0):
+    def load_corpus_data(self, shard_num=1, shard_idx=0, key="train"):
         self.corpus = load_dataset(self.data_args.corpus_name, data_files=self.data_args.corpus_path, cache_dir=self.cache_dir)["train"]
         self.preprocessor = CorpusPreProcessor
         self.corpus = self.corpus.shard(shard_num, shard_idx)

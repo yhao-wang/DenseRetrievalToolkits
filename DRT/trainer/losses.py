@@ -43,3 +43,46 @@ class DistributedContrastiveLoss(SimpleContrastiveLoss):
 def get_loss_function(training_args):
     if training_args.loss_fn == "SimpleContrastiveLoss":
         return DistributedContrastiveLoss()
+
+
+class MarginRankingLoss:
+    def __init__(self, margin: float = 1.0):
+        self.margin = margin
+
+    def __call__(self, pos_scores: Tensor, neg_scores: Tensor):
+        return torch.mean(F.relu(self.margin - pos_scores + neg_scores))
+
+
+class SoftMarginRankingLoss:
+    def __init__(self, margin: float = 1.0):
+        self.margin = margin
+
+    def __call__(self, pos_scores: Tensor, neg_scores: Tensor):
+        return torch.mean(F.softplus(self.margin - pos_scores + neg_scores))
+
+
+class BinaryCrossEntropyLoss:
+    def __init__(self, margin: float = 1.0):
+        pass
+
+    def __call__(self, pos_scores: Tensor, neg_scores: Tensor):
+        return (F.binary_cross_entropy_with_logits(pos_scores, torch.ones_like(pos_scores))
+                + F.binary_cross_entropy_with_logits(neg_scores, torch.zeros_like(neg_scores)))
+
+
+class CrossEntropyLoss:
+    def __init__(self, margin: float = 1.0):
+        pass
+
+    def __call__(self, pos_scores: Tensor, neg_scores: Tensor):
+        return (F.cross_entropy(pos_scores, torch.ones(pos_scores.shape [0], dtype=torch.long).to(pos_scores.device))
+                + F.cross_entropy(neg_scores,
+                                  torch.zeros(neg_scores.shape [0], dtype=torch.long).to(pos_scores.device)))
+
+
+rr_loss_functions = {
+    "mr": MarginRankingLoss,
+    "smr": SoftMarginRankingLoss,
+    "bce": BinaryCrossEntropyLoss,
+    "ce": CrossEntropyLoss,
+}

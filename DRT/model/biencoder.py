@@ -19,7 +19,7 @@ from transformers.modeling_outputs import ModelOutput
 from DRT.arguments import DataArguments
 from DRT.arguments import TrainingArguments
 from DRT.arguments import ModelArguments
-from .utils import mean_pooling
+from .utils import mean_pooling, max_pooling
 from .linear import LinearHead
 
 logger = logging.getLogger(__name__)
@@ -93,7 +93,7 @@ class DRModel(nn.Module):
         q_hidden, q_reps = self.encode_query(query)
         p_hidden, p_reps = self.encode_passage(passage)
 
-        if q_reps is None or p_reps is None:
+        if query is None or passage is None:
             return DROutput(
                 q_reps=q_reps,
                 p_reps=p_reps
@@ -140,6 +140,8 @@ class DRModel(nn.Module):
                 reps = hidden[:, 0, :]
             elif self.pooling == "mean":
                 reps = mean_pooling(hidden, items.attention_mask)
+            elif self.pooling == "max":
+                reps = max_pooling(hidden, items.attention_mask)
             else:
                 raise ValueError("Unknown pooling type: {}".format(self.pooling))
         if head is not None:
@@ -223,8 +225,8 @@ class DRModel(nn.Module):
 
     def save(self, output_dir: str):
         if not self.tied:
-            os.makedirs(os.path.join(output_dir, 'query_model'))
-            os.makedirs(os.path.join(output_dir, 'passage_model'))
+            os.makedirs(os.path.join(output_dir, 'query_model'), exist_ok=True)
+            os.makedirs(os.path.join(output_dir, 'passage_model'), exist_ok=True)
             self.lm_q.save_pretrained(os.path.join(output_dir, 'query_model'))
             self.lm_p.save_pretrained(os.path.join(output_dir, 'passage_model'))
             if self.head_q is not None:
@@ -238,7 +240,7 @@ class DRModel(nn.Module):
         with open(os.path.join(output_dir, 'openmatch_config.json'), 'w') as f:
             json.dump(self._get_config_dict(), f, indent=4)
 
-    def dist_gather_tensor(self, t: Optional [torch.Tensor]):
+    def dist_gather_tensor(self, t: Optional[torch.Tensor]):
         if t is None:
             return None
         t = t.contiguous()
@@ -246,7 +248,7 @@ class DRModel(nn.Module):
         all_tensors = [torch.empty_like(t) for _ in range(self.world_size)]
         dist.all_gather(all_tensors, t)
 
-        all_tensors [self.process_rank] = t
+        all_tensors[self.process_rank] = t
         all_tensors = torch.cat(all_tensors, dim=0)
 
         return all_tensors

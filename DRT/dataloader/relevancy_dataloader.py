@@ -1,6 +1,7 @@
 from torch.utils.data import DataLoader, RandomSampler, SequentialSampler
 from torch.utils.data.distributed import DistributedSampler
 from torch.cuda import device_count
+import os
 from ..dataset.data_collator import EncodeCollator, QPCollator
 
 
@@ -14,7 +15,7 @@ class Relevancy_dataloader:
         self.neg_sampler = neg_sampler
 
     def _get_sampler(self, dataset, shuffle=False):
-        if device_count() > 1:
+        if 'RANK' in os.environ and device_count() > 1:
             datset_sampler = DistributedSampler(dataset, shuffle=shuffle)
         else:
             if shuffle:
